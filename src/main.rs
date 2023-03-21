@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
-#![feature(portable_simd)]
+/*#![feature(portable_simd)]
 #![feature(iter_array_chunks)]
-#![feature(array_chunks)]
+#![feature(array_chunks)]*/
 
 use chess::*;
 use vampirc_uci::UciPiece;
@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::io::{self, BufRead};
 use vampirc_uci::{parse_one, UciMessage};
 
-mod belief;
+//mod belief;
 mod search;
 mod nn;
 

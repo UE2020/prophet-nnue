@@ -52,7 +52,7 @@ pub fn negamax(
     }
 
     if depth == 0 {
-        return eval(board, board.side_to_move());
+        return eval(board);
     }
 
     todo!()

@@ -10,12 +10,16 @@ use dfdx::{
     tensor_ops::Backward,
     nn::TensorCollection,
     tensor::TensorFrom,
-    tensor::TensorFromVec
+    tensor::TensorFromVec,
+    data::*,
 };
 
 use chess::*;
 
+use std::{time::Instant, str::FromStr};
+use rand::prelude::{SeedableRng, StdRng};
 use crate::search::eval;
+use indicatif::ProgressIterator;
 
 #[cfg(not(feature = "cuda"))]
 type Device = dfdx::tensor::Cpu;
@@ -25,15 +29,41 @@ type Device = dfdx::tensor::Cuda;
 
 // first let's declare our neural network to optimze
 type Mlp = (
-    (Linear<768, 512>, ReLU),
-    (Linear<512, 256>, ReLU),
-    (Linear<256, 1>, Tanh),
+    (Linear<384, 256>, ReLU),
+    (Linear<256, 128>, ReLU),
+    (Linear<128, 1>, Tanh),
 );
+
+pub struct Positions {
+    input: Vec<Vec<f32>>,
+    labels: Vec<f32>,
+}
+
+
+impl ExactSizeDataset for Positions {
+    type Item<'a> = (Vec<f32>, f32) where Self: 'a;
+    fn get(&self, index: usize) -> Self::Item<'_> {
+        (self.input[index].clone(), self.labels[index])
+    }
+    fn len(&self) -> usize {
+        self.input.len()
+    }
+}
 
 pub fn main() {
     let dev = Device::default();
+    let mut rng = StdRng::seed_from_u64(0);
 
     let mut mlp = dev.build_module::<Mlp, f32>();
+    mlp.load("model.npz").unwrap();
+    let mut test_tensor = [0f32; 384];
+    let board = Board::from_str("4k3/8/8/8/8/8/RNBQKBNR/QQQQQQQQ w - - 0 1").unwrap();
+    encode(board, &mut test_tensor);
+    let test_tensor = dev.tensor(test_tensor);
+    let logits = mlp.forward(test_tensor);
+    dbg!(logits.array()[0] * 103.0);
+    dbg!(eval(board));
+    return;
     let mut grads = mlp.alloc_grads();
 
     let mut sgd = Sgd::new(
@@ -45,11 +75,13 @@ pub fn main() {
         },
     );
 
-    let mut x_data = vec![vec![0f32; 768]; 40000];
-    let mut y_data = vec![vec![0f32; 1]; 40000];
-    for i in 0..10000 {
+
+    let mut x_data = vec![vec![0f32; 384]; 1000000];
+    let mut y_data = vec![0f32; 1000000];
+    let mut training_point = 0usize;
+    for i in 0..25000 {
         let mut board = Board::default();
-        for i in 0..40 {
+        for _ in 0..40 {
             let mut moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
             if moves.len() == 0 {
                 board = Board::default();
@@ -58,26 +90,61 @@ pub fn main() {
             let rand = (dev.random_u64() as f64 / u64::MAX as f64) * moves.len() as f64;
             let mov = moves[rand as usize];
             board = board.make_move_new(mov);
-            let eval = eval(board, board.side_to_move());
-            y_data[i][0] = eval as f32 / 20.0;
+            let eval = eval(board);
+            y_data[training_point] = eval as f32 / 103.0;
             // encode
-            encode(board, &mut x_data[i]);
+            encode(board, &mut x_data[training_point]);
+            training_point += 1;
         }
     }
 
-    let x: Tensor<Rank2<40000, 768>, f32, _> = dev.tensor_from_vec(flatten(x_data), (Const::<40000>,Const::<768>));
-    let y: Tensor<Rank2<40000, 1>, f32, _> = dev.tensor_from_vec(flatten(y_data), (Const::<40000>,Const::<1>));
+    let positions = Positions {
+        input: x_data,
+        labels: y_data,
+    };
 
-    for i in 0..1000 {
-        let prediction = mlp.forward_mut(x.trace(grads));
-        let loss = mse_loss(prediction, y.clone());
-        println!("{}\t{:?}", i, loss.array());
-        grads = loss.backward();
-        sgd.update(&mut mlp, &grads)
-            .expect("Oops, there were some unused params");
-        mlp.zero_grads(&mut grads);
+    const BATCH_SIZE: usize = 32;
+
+    let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
+        (
+            dev.tensor_from_vec(input, (Const::<384>,)),
+            dev.tensor([lbl]),
+        )
+    };
+
+    for i_epoch in 0..3 {
+        let mut total_epoch_loss = 0.0;
+        let mut num_batches = 0;
+        let start = Instant::now();
+        for (input, label) in positions
+            .shuffled(&mut rng)
+            .map(preprocess)
+            .batch(Const::<BATCH_SIZE>)
+            .collate()
+            .stack()
+            .progress()
+        {
+            let logits = mlp.forward_mut(input.traced(grads));
+            let loss = mse_loss(logits, label);
+
+            total_epoch_loss += loss.array();
+            //dbg!(loss.array());
+            num_batches += 1;
+
+            grads = loss.backward();
+            sgd.update(&mut mlp, &grads).unwrap();
+            mlp.zero_grads(&mut grads);
+        }
+        let dur = Instant::now() - start;
+
+        println!(
+            "Epoch {i_epoch} in {:?} ({:.3} batches/s): avg sample loss {:.5}",
+            dur,
+            num_batches as f32 / dur.as_secs_f32(),
+            BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
+        );
     }
-    
+
     mlp.save("model.npz").unwrap();
 }
 
