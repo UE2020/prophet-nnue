@@ -24,11 +24,12 @@ type Device = dfdx::tensor::Cpu;
 type Device = dfdx::tensor::Cuda;
 
 type Mlp = (
-    (Conv2D<6, 72, 3>, Bias2D<72>, ReLU),
-	(Conv2D<72, 72, 3>, Bias2D<72>, ReLU),
-	(Conv2D<72, 72, 3>, Bias2D<72>, ReLU),
-    Flatten2D,
-    (Linear<288, 1>, Tanh),
+    ((Conv2D<6, 32, 3, 1>, Bias2D<32>), ReLU),
+	((Conv2D<32, 64, 3, 1, 1>, Bias2D<64>), ReLU, MaxPool2D<2, 1>),
+	((Conv2D<64, 128, 3, 1>, Bias2D<128>), ReLU),
+	((Conv2D<128, 128, 3, 1, 1>, Bias2D<128>), ReLU, MaxPool2D<2, 1>),
+    (Flatten2D, Linear<512, 128>, ReLU),
+	(Linear<128, 1>, Tanh)
 );
 
 pub struct Positions {
@@ -52,16 +53,6 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
 	let mut mlp = dev.build_module::<Mlp, f32>();
-    mlp.load("conv_model_large.npz");
-    /*mlp.load("model.npz").unwrap();
-    let mut test_tensor = vec![0f32; 384];
-    let board = Board::from_str("rnbqkbnr/pppppp1p/8/7p/4P3/2P5/1P1P1PPP/R3KBNR w KQkq - 0 1").unwrap();
-    encode(board, &mut test_tensor);
-    let test_tensor = dev.tensor_from_vec(test_tensor, (Const::<6>, Const::<8>, Const::<8>));
-    let logits = mlp.forward(test_tensor);
-    dbg!(logits.array()[0] * 20.0);
-    dbg!(eval(board));
-    return;*/
 
     let mut grads = mlp.alloc_grads();
 
@@ -103,7 +94,7 @@ pub fn main() {
     let mut x_data = vec![];
     let mut y_data = vec![];
     for result in rdr.records() {
-        if game > 100000 {
+        if game > 1000000 {
             break;
         }
         let record = result.unwrap();
@@ -120,7 +111,7 @@ pub fn main() {
 			-eval
 		};
 
-		if eval.abs() < 50 {
+		if eval.abs() < 100 {
 			continue;
 		}
         
@@ -171,6 +162,13 @@ pub fn main() {
             grads = loss.backward();
             sgd.update(&mut mlp, &grads).unwrap();
             mlp.zero_grads(&mut grads);
+
+			if num_batches % 1000 == 0 {
+				println!(
+					"Epoch {i_epoch} progress update: avg sample loss {:.5}",
+					BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
+				);
+			}
         }
         let dur = Instant::now() - start;
 
@@ -181,7 +179,7 @@ pub fn main() {
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
         );
 
-        mlp.save("conv_model_large.npz").unwrap();
+        mlp.save("conv_model_medium.npz").unwrap();
 
         if (BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32) <= 0.01 {
             break;
