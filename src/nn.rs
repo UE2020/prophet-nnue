@@ -1,8 +1,8 @@
 use dfdx::{
-    prelude::{*, conv::Conv2D},
+    prelude::{*},
     losses::mse_loss,
     nn::SaveToNpz,
-    optim::{Momentum, Optimizer, Sgd, SgdConfig},
+    optim::{Momentum, Optimizer, Sgd, SgdConfig, Adam},
     tensor::{AsArray, Trace, DeviceStorage},
     tensor_ops::Backward,
     tensor::TensorFrom,
@@ -23,14 +23,12 @@ type Device = dfdx::tensor::Cpu;
 #[cfg(feature = "cuda")]
 type Device = dfdx::tensor::Cuda;
 
-type BiasedConv = (Conv2D<3, 5, 4>, Bias2D<5>);
-
 type Mlp = (
-    (Conv2D<6, 256, 3, 1, 1>, Bias2D<256>, ReLU),
-	(Conv2D<6, 256, 3, 1, 1>, Bias2D<256>, ReLU),
-	(Conv2D<6, 256, 3, 1, 1>, Bias2D<256>, ReLU),
-    (Linear<256, 128>, ReLU),
-    (Linear<128, 1>, Tanh),
+    (Conv2D<6, 72, 3>, Bias2D<72>, ReLU),
+	(Conv2D<72, 72, 3>, Bias2D<72>, ReLU),
+	(Conv2D<72, 72, 3>, Bias2D<72>, ReLU),
+    Flatten2D,
+    (Linear<288, 1>, Tanh),
 );
 
 pub struct Positions {
@@ -54,25 +52,22 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
 	let mut mlp = dev.build_module::<Mlp, f32>();
-    mlp.load("model.npz").unwrap();
-    let mut test_tensor = [0f32; 384];
+    mlp.load("conv_model_large.npz");
+    /*mlp.load("model.npz").unwrap();
+    let mut test_tensor = vec![0f32; 384];
     let board = Board::from_str("rnbqkbnr/pppppp1p/8/7p/4P3/2P5/1P1P1PPP/R3KBNR w KQkq - 0 1").unwrap();
     encode(board, &mut test_tensor);
-    let test_tensor = dev.tensor(test_tensor);
+    let test_tensor = dev.tensor_from_vec(test_tensor, (Const::<6>, Const::<8>, Const::<8>));
     let logits = mlp.forward(test_tensor);
     dbg!(logits.array()[0] * 20.0);
     dbg!(eval(board));
-    return;
+    return;*/
 
     let mut grads = mlp.alloc_grads();
 
-    let mut sgd = Sgd::new(
+    let mut sgd = Adam::new(
         &mlp,
-        SgdConfig {
-            lr: 0.1,
-            momentum: Some(Momentum::Nesterov(0.9)),
-            weight_decay: None,
-        },
+        Default::default()
     );
 
 
@@ -101,13 +96,14 @@ pub fn main() {
     }*/
 
     // read csv
+    println!("Gathering data...");
 	let file = std::fs::File::open("chessData.csv").expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
     let mut game = 0;
     let mut x_data = vec![];
     let mut y_data = vec![];
     for result in rdr.records() {
-        if game > 1000000 * 40 {
+        if game > 100000 {
             break;
         }
         let record = result.unwrap();
@@ -137,6 +133,8 @@ pub fn main() {
         game += 1;
     }
 
+    println!("Done!");
+
     let positions = Positions {
         input: x_data,
         labels: y_data,
@@ -146,8 +144,8 @@ pub fn main() {
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<384>,)),
-            dev.tensor([lbl]),
+            dev.tensor_from_vec(input, (Const::<6>, Const::<8>, Const::<8>)),
+            dev.tensor([lbl])
         )
     };
 
@@ -183,12 +181,14 @@ pub fn main() {
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
         );
 
+        mlp.save("conv_model_large.npz").unwrap();
+
         if (BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32) <= 0.01 {
             break;
         }
     }
 
-    mlp.save("model.npz").unwrap();
+    mlp.save("conv_model.npz").unwrap();
 }
 
 fn flatten<T>(nested: Vec<Vec<T>>) -> Vec<T> {
