@@ -2,6 +2,7 @@
 /*#![feature(portable_simd)]
 #![feature(iter_array_chunks)]
 #![feature(array_chunks)]*/
+#![feature(generic_const_exprs)]
 
 use chess::*;
 use vampirc_uci::UciPiece;

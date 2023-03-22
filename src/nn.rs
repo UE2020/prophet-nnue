@@ -1,14 +1,10 @@
 use dfdx::{
-    prelude::*,
-
+    prelude::{*, conv::Conv2D},
     losses::mse_loss,
-    nn::builders::*,
     nn::SaveToNpz,
     optim::{Momentum, Optimizer, Sgd, SgdConfig},
-    shapes::Rank2,
-    tensor::{AsArray, SampleTensor, Tensor, Trace, DeviceStorage},
+    tensor::{AsArray, Trace, DeviceStorage},
     tensor_ops::Backward,
-    nn::TensorCollection,
     tensor::TensorFrom,
     tensor::TensorFromVec,
     data::*,
@@ -16,7 +12,7 @@ use dfdx::{
 
 use chess::*;
 
-use std::{time::Instant, str::FromStr};
+use std::{time::Instant, str::FromStr, vec};
 use rand::prelude::{SeedableRng, StdRng};
 use crate::search::eval;
 use indicatif::ProgressIterator;
@@ -27,9 +23,12 @@ type Device = dfdx::tensor::Cpu;
 #[cfg(feature = "cuda")]
 type Device = dfdx::tensor::Cuda;
 
-// first let's declare our neural network to optimze
+type BiasedConv = (Conv2D<3, 5, 4>, Bias2D<5>);
+
 type Mlp = (
-    (Linear<384, 256>, ReLU),
+    (Conv2D<6, 256, 3, 1, 1>, Bias2D<256>, ReLU),
+	(Conv2D<6, 256, 3, 1, 1>, Bias2D<256>, ReLU),
+	(Conv2D<6, 256, 3, 1, 1>, Bias2D<256>, ReLU),
     (Linear<256, 128>, ReLU),
     (Linear<128, 1>, Tanh),
 );
@@ -54,16 +53,17 @@ pub fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut mlp = dev.build_module::<Mlp, f32>();
+	let mut mlp = dev.build_module::<Mlp, f32>();
     mlp.load("model.npz").unwrap();
     let mut test_tensor = [0f32; 384];
-    let board = Board::from_str("4k3/8/8/8/8/8/RNBQKBNR/QQQQQQQQ w - - 0 1").unwrap();
+    let board = Board::from_str("rnbqkbnr/pppppp1p/8/7p/4P3/2P5/1P1P1PPP/R3KBNR w KQkq - 0 1").unwrap();
     encode(board, &mut test_tensor);
     let test_tensor = dev.tensor(test_tensor);
     let logits = mlp.forward(test_tensor);
-    dbg!(logits.array()[0] * 103.0);
+    dbg!(logits.array()[0] * 20.0);
     dbg!(eval(board));
     return;
+
     let mut grads = mlp.alloc_grads();
 
     let mut sgd = Sgd::new(
@@ -76,12 +76,14 @@ pub fn main() {
     );
 
 
-    let mut x_data = vec![vec![0f32; 384]; 1000000];
-    let mut y_data = vec![0f32; 1000000];
+    /*const MOVE_COUNT: usize = 40;
+    const GAME_COUNT: usize = 1000000;
+    let mut x_data = vec![vec![0f32; 384]; MOVE_COUNT * GAME_COUNT];
+    let mut y_data = vec![0f32; MOVE_COUNT * GAME_COUNT];
     let mut training_point = 0usize;
-    for i in 0..25000 {
+    for _ in 0..GAME_COUNT {
         let mut board = Board::default();
-        for _ in 0..40 {
+        for _ in 0..MOVE_COUNT {
             let mut moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
             if moves.len() == 0 {
                 board = Board::default();
@@ -96,6 +98,43 @@ pub fn main() {
             encode(board, &mut x_data[training_point]);
             training_point += 1;
         }
+    }*/
+
+    // read csv
+	let file = std::fs::File::open("chessData.csv").expect("file not found");
+    let mut rdr = csv::Reader::from_reader(file);
+    let mut game = 0;
+    let mut x_data = vec![];
+    let mut y_data = vec![];
+    for result in rdr.records() {
+        if game > 1000000 * 40 {
+            break;
+        }
+        let record = result.unwrap();
+        let board = Board::from_str(&record[0]).expect("bad fen");
+        let eval = record[1].parse::<i32>();
+        let eval = match eval {
+            Ok(eval) => eval.clamp(-2000, 2000),
+            Err(_) => continue,
+        };
+
+		let eval = if board.side_to_move() == Color::White {
+			eval
+		} else {
+			-eval
+		};
+
+		if eval.abs() < 50 {
+			continue;
+		}
+        
+        let mut input = vec![0f32; 384];
+        encode(board, &mut input);
+        
+        x_data.push(input);
+        y_data.push(eval as f32 / 2000.0);
+
+        game += 1;
     }
 
     let positions = Positions {
@@ -112,7 +151,7 @@ pub fn main() {
         )
     };
 
-    for i_epoch in 0..3 {
+    for i_epoch in 0..100 {
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
         let start = Instant::now();
@@ -143,6 +182,10 @@ pub fn main() {
             num_batches as f32 / dur.as_secs_f32(),
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
         );
+
+        if (BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32) <= 0.01 {
+            break;
+        }
     }
 
     mlp.save("model.npz").unwrap();
