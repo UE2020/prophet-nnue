@@ -2,7 +2,7 @@ use dfdx::{
     prelude::{*},
     losses::mse_loss,
     nn::SaveToNpz,
-    optim::{Momentum, Optimizer, Sgd, SgdConfig, Adam},
+    optim::{Momentum, Optimizer, Sgd, SgdConfig, Adam, AdamConfig, WeightDecay},
     tensor::{AsArray, Trace, DeviceStorage},
     tensor_ops::Backward,
     tensor::TensorFrom,
@@ -24,12 +24,12 @@ type Device = dfdx::tensor::Cpu;
 type Device = dfdx::tensor::Cuda;
 
 type Mlp = (
-    ((Conv2D<6, 32, 3, 1>, Bias2D<32>), ReLU),
-	((Conv2D<32, 64, 3, 1, 1>, Bias2D<64>), ReLU, MaxPool2D<2, 1>),
-	((Conv2D<64, 128, 3, 1>, Bias2D<128>), ReLU),
-	((Conv2D<128, 128, 3, 1, 1>, Bias2D<128>), ReLU, MaxPool2D<2, 1>),
-    (Flatten2D, Linear<512, 128>, ReLU),
-	(Linear<128, 1>, Tanh)
+    ((Conv2D<6, 16, 3, 1, 1>, BatchNorm2D<16>), ReLU),
+	((Conv2D<16, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU, MaxPool2D<2, 1>),
+	((Conv2D<32, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
+	((Conv2D<32, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU, MaxPool2D<2, 1>),
+    (Flatten2D, Linear<1152, 256>, ReLU),
+	(Linear<256, 1>, Tanh)
 );
 
 pub struct Positions {
@@ -53,12 +53,16 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
 	let mut mlp = dev.build_module::<Mlp, f32>();
-
+    //mlp.load("conv_model_batchnorm2d.npz").unwrap();
     let mut grads = mlp.alloc_grads();
 
     let mut sgd = Adam::new(
         &mlp,
-        Default::default()
+        AdamConfig {
+           // lr: 0.1,
+            //weight_decay: Some(WeightDecay::L2(0.0001)),
+            ..Default::default()
+        }
     );
 
 
@@ -94,7 +98,7 @@ pub fn main() {
     let mut x_data = vec![];
     let mut y_data = vec![];
     for result in rdr.records() {
-        if game > 1000000 {
+        if game > 300000 {
             break;
         }
         let record = result.unwrap();
@@ -131,7 +135,7 @@ pub fn main() {
         labels: y_data,
     };
 
-    const BATCH_SIZE: usize = 32;
+    const BATCH_SIZE: usize = 64;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
@@ -163,7 +167,7 @@ pub fn main() {
             sgd.update(&mut mlp, &grads).unwrap();
             mlp.zero_grads(&mut grads);
 
-			if num_batches % 1000 == 0 {
+			if false{
 				println!(
 					"Epoch {i_epoch} progress update: avg sample loss {:.5}",
 					BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
@@ -179,14 +183,14 @@ pub fn main() {
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
         );
 
-        mlp.save("conv_model_medium.npz").unwrap();
+        mlp.save("conv_model_batchnorm2d.npz").unwrap();
 
         if (BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32) <= 0.01 {
             break;
         }
     }
 
-    mlp.save("conv_model.npz").unwrap();
+    //mlp.save("conv_model.npz").unwrap();
 }
 
 fn flatten<T>(nested: Vec<Vec<T>>) -> Vec<T> {
