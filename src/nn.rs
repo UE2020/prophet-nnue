@@ -53,7 +53,7 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
 	let mut mlp = dev.build_module::<Mlp, f32>();
-    //mlp.load("conv_model_batchnorm2d.npz").unwrap();
+    mlp.load("conv_model_batchnorm2d.npz").unwrap();
     let mut grads = mlp.alloc_grads();
 
     let mut sgd = Adam::new(
