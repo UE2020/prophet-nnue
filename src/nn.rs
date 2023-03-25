@@ -19,7 +19,7 @@ use std::{str::FromStr, time::Instant, vec};
 
 type Device = dfdx::tensor::Cuda;
 
-type BasicBlock<const C: usize> = Residual<(
+pub type BasicBlock<const C: usize> = Residual<(
     Conv2D<C, C, 3, 1, 1>,
     BatchNorm2D<C>,
     ReLU,
@@ -27,12 +27,11 @@ type BasicBlock<const C: usize> = Residual<(
     BatchNorm2D<C>,
 )>;
 
-type MaxBlock =	((BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU));
-
-type Model = (
+pub type Model = (
     ((Conv2D<12, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
-	(BasicBlock<32>, ReLU),
-	(BasicBlock<32>, ReLU),
+	(BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
+	(BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
+	(BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
     ((Conv2D<32, 1, 1>, BatchNorm2D<1>), ReLU),
     (Flatten2D, Linear<64, 256>, ReLU, Linear<256, 1>, Tanh),
     //(Linear<128, 1>, Tanh)
@@ -58,15 +57,6 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<Model, f32>();
-    // model.load("conv_model.npz").unwrap();
-    // let mut test_tensor = vec![0f32; 768];
-    // let board = Board::from_str("r3r1k1/ppq2ppp/2p3b1/8/3P2B1/2P4P/PP1R1PP1/6K1 b - - 0 21").unwrap();
-    // encode(board, &mut test_tensor);
-    // let test_tensor = dev.tensor_from_vec(test_tensor, (Const::<12>, Const::<8>, Const::<8>));
-    // let logits = model.forward(test_tensor);
-    // dbg!(logits.array()[0] * 20.0);
-    // dbg!(eval(board));
-    // return;
     let mut grads = model.alloc_grads();
 
     let mut opt = Adam::new(
@@ -79,7 +69,7 @@ pub fn main() {
 
     // read csv
     println!("Gathering data...");
-    let file = std::fs::File::open("tactic_evals.csv").expect("file not found");
+    let file = std::fs::File::open("chessData.csv").expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
     let mut game = 0;
     let mut train_positions = Positions {
@@ -93,7 +83,7 @@ pub fn main() {
     };
 
     for result in rdr.records() {
-        if game > 301000 {
+        if game > 1001000 {
             break;
         }
         let record = result.unwrap();
@@ -117,7 +107,7 @@ pub fn main() {
 			-eval
 		};
 
-        if game > 300000 {
+        if game > 1000000 {
             test_positions.input.push(input);
             test_positions.labels.push(eval as f32 / 2000.0);
         } else {

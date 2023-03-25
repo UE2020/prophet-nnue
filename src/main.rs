@@ -16,9 +16,33 @@ use vampirc_uci::{parse_one, UciMessage};
 mod nn;
 mod search;
 
+use dfdx::{
+    data::*,
+    losses::mse_loss,
+    nn::SaveToNpz,
+    optim::{Adam, AdamConfig, Momentum, Optimizer, Sgd, SgdConfig, WeightDecay},
+    prelude::*,
+    tensor::TensorFrom,
+    tensor::TensorFromVec,
+    tensor::{AsArray, DeviceStorage, Trace},
+    tensor_ops::Backward,
+};
+
+type Device = dfdx::tensor::Cpu;
+use rand::prelude::{SeedableRng, StdRng};
+
+
 fn main() {
-    nn::main();
-    /*let mut board = Board::default();
+	nn::main();
+}
+fn unused() {
+	let dev = Device::default();
+    let mut rng = StdRng::seed_from_u64(0);
+
+    let mut model = dev.build_module::<nn::Model, f32>();
+    model.load("conv_model.npz").unwrap();
+    //nn::main();
+    let mut board = Board::default();
 
     for line in io::stdin().lock().lines() {
         let msg: UciMessage = parse_one(&line.unwrap());
@@ -40,7 +64,7 @@ fn main() {
                     let from = mov.from;
                     let to = mov.to;
 
-                    let from = Square::make_square(
+                    let from = chess::Square::make_square(
                         match from.rank {
                             1 => Rank::First,
                             2 => Rank::Second,
@@ -65,7 +89,7 @@ fn main() {
                         },
                     );
 
-                    let to = Square::make_square(
+                    let to = chess::Square::make_square(
                         match to.rank {
                             1 => Rank::First,
                             2 => Rank::Second,
@@ -105,6 +129,21 @@ fn main() {
                 }
             }
             UciMessage::Go { .. } => {
+				let mut best_move = None;
+				let mut best_score = -20.0;
+				let movegen = MoveGen::new_legal(&board);
+				for mov in movegen {
+					let mut board_tensor = vec![0f32; 768];
+					let board = board.make_move_new(mov);
+					nn::encode(board, &mut board_tensor);
+					let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<12>, Const::<8>, Const::<8>));
+					let logits = model.forward(test_tensor);
+					if (-logits.array()[0] * 20.0) > best_score {
+						best_score = -logits.array()[0] * 20.0;
+						best_move = Some(mov);
+					}
+				}
+				println!("bestmove {}", best_move.unwrap());
                 //let result = search::search(board);
                 //println!("bestmove {}", result.0);
                 //eprintln!("Eval: {}", result.1);
@@ -113,5 +152,5 @@ fn main() {
             UciMessage::Quit => break,
             _ => {}
         }
-    }*/
+    }
 }
