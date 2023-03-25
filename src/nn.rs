@@ -1,21 +1,21 @@
 use dfdx::{
-    prelude::{*},
+    data::*,
     losses::mse_loss,
     nn::SaveToNpz,
-    optim::{Momentum, Optimizer, Sgd, SgdConfig, Adam, AdamConfig, WeightDecay},
-    tensor::{AsArray, Trace, DeviceStorage},
-    tensor_ops::Backward,
+    optim::{Adam, AdamConfig, Momentum, Optimizer, Sgd, SgdConfig, WeightDecay},
+    prelude::*,
     tensor::TensorFrom,
     tensor::TensorFromVec,
-    data::*,
+    tensor::{AsArray, DeviceStorage, Trace},
+    tensor_ops::Backward,
 };
 
 use chess::*;
 
-use std::{time::Instant, str::FromStr, vec};
-use rand::prelude::{SeedableRng, StdRng};
 use crate::search::eval;
 use indicatif::ProgressIterator;
+use rand::prelude::{SeedableRng, StdRng};
+use std::{str::FromStr, time::Instant, vec};
 
 #[cfg(not(feature = "cuda"))]
 type Device = dfdx::tensor::Cpu;
@@ -23,20 +23,30 @@ type Device = dfdx::tensor::Cpu;
 #[cfg(feature = "cuda")]
 type Device = dfdx::tensor::Cuda;
 
-type Mlp = (
-    ((Conv2D<6, 16, 3, 1, 1>, BatchNorm2D<16>), ReLU),
-	((Conv2D<16, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU, MaxPool2D<2, 1>),
-	((Conv2D<32, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
-	((Conv2D<32, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU, MaxPool2D<2, 1>),
-    (Flatten2D, Linear<1152, 256>, ReLU),
-	(Linear<256, 1>, Tanh)
+type BasicBlock<const C: usize> = Residual<(
+    Conv2D<C, C, 3, 1, 1>,
+    BatchNorm2D<C>,
+    ReLU,
+    Conv2D<C, C, 3, 1, 1>,
+    BatchNorm2D<C>,
+)>;
+
+type MaxBlock =	((BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU));
+
+type Model = (
+    ((Conv2D<12, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
+	MaxBlock,
+	MaxBlock,
+	MaxBlock,
+    ((Conv2D<32, 1, 1>, BatchNorm2D<1>), ReLU),
+    (Flatten2D, Linear<64, 256>, ReLU, Linear<256, 1>, Tanh),
+    //(Linear<128, 1>, Tanh)
 );
 
 pub struct Positions {
     input: Vec<Vec<f32>>,
     labels: Vec<f32>,
 }
-
 
 impl ExactSizeDataset for Positions {
     type Item<'a> = (Vec<f32>, f32) where Self: 'a;
@@ -52,53 +62,42 @@ pub fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-	let mut mlp = dev.build_module::<Mlp, f32>();
-    mlp.load("conv_model_batchnorm2d.npz").unwrap();
-    let mut grads = mlp.alloc_grads();
+    let mut model = dev.build_module::<Model, f32>();
+    //model.load("conv_model.npz").unwrap();
+    // let mut test_tensor = vec![0f32; 384];
+    // let board = Board::from_str("3k4/2p5/1pK5/p7/P7/7B/2P5/8 b - - 5 45").unwrap();
+    // encode(board, &mut test_tensor);
+    // let test_tensor = dev.tensor_from_vec(test_tensor, (Const::<12>, Const::<8>, Const::<8>));
+    // let logits = mlp.forward(test_tensor);
+    // dbg!(logits.array()[0] * 20.0);
+    // dbg!(eval(board));
+    // return;
+    let mut grads = model.alloc_grads();
 
-    let mut sgd = Adam::new(
-        &mlp,
+    let mut opt = Adam::new(
+        &model,
         AdamConfig {
-           // lr: 0.1,
-            //weight_decay: Some(WeightDecay::L2(0.0001)),
             ..Default::default()
-        }
+        },
     );
-
-
-    /*const MOVE_COUNT: usize = 40;
-    const GAME_COUNT: usize = 1000000;
-    let mut x_data = vec![vec![0f32; 384]; MOVE_COUNT * GAME_COUNT];
-    let mut y_data = vec![0f32; MOVE_COUNT * GAME_COUNT];
-    let mut training_point = 0usize;
-    for _ in 0..GAME_COUNT {
-        let mut board = Board::default();
-        for _ in 0..MOVE_COUNT {
-            let mut moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
-            if moves.len() == 0 {
-                board = Board::default();
-                moves = MoveGen::new_legal(&board).collect();
-            }
-            let rand = (dev.random_u64() as f64 / u64::MAX as f64) * moves.len() as f64;
-            let mov = moves[rand as usize];
-            board = board.make_move_new(mov);
-            let eval = eval(board);
-            y_data[training_point] = eval as f32 / 103.0;
-            // encode
-            encode(board, &mut x_data[training_point]);
-            training_point += 1;
-        }
-    }*/
 
     // read csv
     println!("Gathering data...");
-	let file = std::fs::File::open("chessData.csv").expect("file not found");
+    let file = std::fs::File::open("tactic_evals.csv").expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
     let mut game = 0;
-    let mut x_data = vec![];
-    let mut y_data = vec![];
+    let mut train_positions = Positions {
+        input: vec![],
+        labels: vec![],
+    };
+
+    let mut test_positions = Positions {
+        input: vec![],
+        labels: vec![],
+    };
+
     for result in rdr.records() {
-        if game > 300000 {
+        if game > 201000 {
             break;
         }
         let record = result.unwrap();
@@ -109,46 +108,40 @@ pub fn main() {
             Err(_) => continue,
         };
 
-		let eval = if board.side_to_move() == Color::White {
-			eval
-		} else {
-			-eval
-		};
+        if eval.abs() < 100 {
+            continue;
+        }
 
-		if eval.abs() < 100 {
-			continue;
-		}
-        
-        let mut input = vec![0f32; 384];
+        let mut input = vec![0f32; 768];
         encode(board, &mut input);
-        
-        x_data.push(input);
-        y_data.push(eval as f32 / 2000.0);
+
+        if game > 200000 {
+            test_positions.input.push(input);
+            test_positions.labels.push(eval as f32 / 2000.0);
+        } else {
+			train_positions.input.push(input);
+            train_positions.labels.push(eval as f32 / 2000.0);
+		}
 
         game += 1;
     }
 
     println!("Done!");
 
-    let positions = Positions {
-        input: x_data,
-        labels: y_data,
-    };
-
     const BATCH_SIZE: usize = 64;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<6>, Const::<8>, Const::<8>)),
-            dev.tensor([lbl])
+            dev.tensor_from_vec(input, (Const::<12>, Const::<8>, Const::<8>)),
+            dev.tensor([lbl]),
         )
     };
 
-    for i_epoch in 0..100 {
+    for i_epoch in 0..1000 {
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
         let start = Instant::now();
-        for (input, label) in positions
+        for (input, label) in train_positions
             .shuffled(&mut rng)
             .map(preprocess)
             .batch(Const::<BATCH_SIZE>)
@@ -156,7 +149,7 @@ pub fn main() {
             .stack()
             .progress()
         {
-            let logits = mlp.forward_mut(input.traced(grads));
+            let logits = model.forward_mut(input.traced(grads));
             let loss = mse_loss(logits, label);
 
             total_epoch_loss += loss.array();
@@ -164,26 +157,37 @@ pub fn main() {
             num_batches += 1;
 
             grads = loss.backward();
-            sgd.update(&mut mlp, &grads).unwrap();
-            mlp.zero_grads(&mut grads);
-
-			if false{
-				println!(
-					"Epoch {i_epoch} progress update: avg sample loss {:.5}",
-					BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
-				);
-			}
+            opt.update(&mut model, &grads).unwrap();
+            model.zero_grads(&mut grads);
         }
         let dur = Instant::now() - start;
 
-        println!(
-            "Epoch {i_epoch} in {:?} ({:.3} batches/s): avg sample loss {:.5}",
+        model.save("conv_model.npz").unwrap();
+
+        // test model
+        let mut test_total_epoch_loss = 0.0;
+        let mut test_num_batches = 0;
+        for (input, label) in test_positions
+            .shuffled(&mut rng)
+            .map(preprocess)
+            .batch(Const::<BATCH_SIZE>)
+            .collate()
+            .stack()
+        {
+            let logits = model.forward(input);
+            let loss = mse_loss(logits, label);
+
+            test_total_epoch_loss += loss.array();
+            test_num_batches += 1;
+        }
+
+		println!(
+            "Epoch {i_epoch} in {:?} ({:.3} batches/s): avg sample loss {:.5}; test loss {:.5}",
             dur,
             num_batches as f32 / dur.as_secs_f32(),
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
+			BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
         );
-
-        mlp.save("conv_model_batchnorm2d.npz").unwrap();
 
         if (BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32) <= 0.01 {
             break;
@@ -207,15 +211,13 @@ pub fn encode(board: Board, out: &mut [f32]) {
     let white = board.color_combined(Color::White);
     let black = board.color_combined(Color::Black);
 
-    let multiplier = if board.side_to_move() == Color::White {1.0} else {-1.0};
-
     //////////////////// pawns ////////////////////
 
     let mut remaining = white & pawns;
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index()] = multiplier * 1.0;
+        out[sq.to_index()] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -224,7 +226,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index()] = multiplier * -1.0;
+        out[sq.to_index() + 64] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -235,7 +237,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64] = multiplier * 1.0;
+        out[sq.to_index() + 64 * 2] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -244,7 +246,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64] = multiplier * -1.0;
+        out[sq.to_index() + 64 * 3] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -255,7 +257,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*2] = multiplier * 1.0;
+        out[sq.to_index() + 64 * 4] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -264,7 +266,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*2] = multiplier * -1.0;
+        out[sq.to_index() + 64 * 5] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -275,7 +277,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*3] = multiplier * 1.0;
+        out[sq.to_index() + 64 * 6] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -284,7 +286,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*3] = multiplier * -1.0;
+        out[sq.to_index() + 64 * 7] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -295,7 +297,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*4] = multiplier * 1.0;
+        out[sq.to_index() + 64 * 8] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -304,7 +306,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*4] = multiplier * -1.0;
+        out[sq.to_index() + 64 * 9] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -315,7 +317,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*5] = multiplier * 1.0;
+        out[sq.to_index() + 64 * 10] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -324,7 +326,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64*5] = multiplier * -1.0;
+        out[sq.to_index() + 64 * 11] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }

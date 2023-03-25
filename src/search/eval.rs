@@ -10,9 +10,13 @@ pub fn eval(board: Board) -> i32 {
     let white = board.color_combined(Color::White);
     let black = board.color_combined(Color::Black);
 
-    let eval = ((pawns&white).popcnt() as i32 - (pawns&black).popcnt() as i32) + (((knights&white).popcnt() as i32*3) - ((knights&black).popcnt() as i32*3)) + (((bishops&white).popcnt() as i32*3) - ((bishops&black).popcnt() as i32*3)) + (((rooks&white).popcnt() as i32*5) - ((rooks&black).popcnt() as i32*5)) + (((queens&white).popcnt() as i32*9) - ((queens&black).popcnt() as i32*9));
+    let eval = ((pawns & white).popcnt() as i32 - (pawns & black).popcnt() as i32)
+        + (((knights & white).popcnt() as i32 * 3) - ((knights & black).popcnt() as i32 * 3))
+        + (((bishops & white).popcnt() as i32 * 3) - ((bishops & black).popcnt() as i32 * 3))
+        + (((rooks & white).popcnt() as i32 * 5) - ((rooks & black).popcnt() as i32 * 5))
+        + (((queens & white).popcnt() as i32 * 9) - ((queens & black).popcnt() as i32 * 9));
     if board.side_to_move() == Color::White {
-        eval 
+        eval
     } else {
         -eval
     }

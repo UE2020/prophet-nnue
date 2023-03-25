@@ -13,8 +13,8 @@ use std::io::{self, BufRead};
 use vampirc_uci::{parse_one, UciMessage};
 
 //mod belief;
-mod search;
 mod nn;
+mod search;
 
 fn main() {
     nn::main();
