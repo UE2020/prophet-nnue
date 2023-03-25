@@ -92,7 +92,7 @@ pub fn main() {
     };
 
     for result in rdr.records() {
-        if game > 201000 {
+        if game > 1001000 {
             break;
         }
         let record = result.unwrap();
@@ -110,7 +110,7 @@ pub fn main() {
         let mut input = vec![0f32; 768];
         encode(board, &mut input);
 
-        if game > 200000 {
+        if game > 1000000 {
             test_positions.input.push(input);
             test_positions.labels.push(eval as f32 / 2000.0);
         } else {
