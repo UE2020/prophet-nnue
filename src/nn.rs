@@ -219,7 +219,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
 	}
 
 	fn to_index(sq: chess::Square, flip: bool) -> usize {
-		if flip { 64 - sq.to_index() } else { sq.to_index() }
+		if flip { 63 - sq.to_index() } else { sq.to_index() }
 	}
 
     //////////////////// pawns ////////////////////
