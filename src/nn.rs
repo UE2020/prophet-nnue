@@ -72,7 +72,7 @@ pub fn main() {
     let mut opt = Adam::new(
         &model,
         AdamConfig {
-			weight_decay: Some(WeightDecay::L2(1e-1)),
+			weight_decay: Some(WeightDecay::L2(0.001)),
             ..Default::default()
         },
     );
