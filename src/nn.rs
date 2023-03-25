@@ -17,10 +17,6 @@ use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{str::FromStr, time::Instant, vec};
 
-#[cfg(not(feature = "cuda"))]
-type Device = dfdx::tensor::Cpu;
-
-#[cfg(feature = "cuda")]
 type Device = dfdx::tensor::Cuda;
 
 type BasicBlock<const C: usize> = Residual<(
