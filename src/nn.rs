@@ -17,7 +17,7 @@ use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{str::FromStr, time::Instant, vec};
 
-type Device = dfdx::tensor::Cuda;
+type Device = dfdx::tensor::Cpu;
 
 type BasicBlock<const C: usize> = Residual<(
     Conv2D<C, C, 3, 1, 1>,
@@ -58,15 +58,15 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<Model, f32>();
-    //model.load("conv_model.npz").unwrap();
-    // let mut test_tensor = vec![0f32; 384];
-    // let board = Board::from_str("3k4/2p5/1pK5/p7/P7/7B/2P5/8 b - - 5 45").unwrap();
-    // encode(board, &mut test_tensor);
-    // let test_tensor = dev.tensor_from_vec(test_tensor, (Const::<12>, Const::<8>, Const::<8>));
-    // let logits = mlp.forward(test_tensor);
-    // dbg!(logits.array()[0] * 20.0);
-    // dbg!(eval(board));
-    // return;
+    model.load("conv_model.npz").unwrap();
+    let mut test_tensor = vec![0f32; 768];
+    let board = Board::from_str("r3r1k1/ppq2ppp/2p3b1/8/3P2B1/2P4P/PP1R1PP1/6K1 b - - 0 21").unwrap();
+    encode(board, &mut test_tensor);
+    let test_tensor = dev.tensor_from_vec(test_tensor, (Const::<12>, Const::<8>, Const::<8>));
+    let logits = model.forward(test_tensor);
+    dbg!(logits.array()[0] * 20.0);
+    dbg!(eval(board));
+    return;
     let mut grads = model.alloc_grads();
 
     let mut opt = Adam::new(
@@ -204,8 +204,17 @@ pub fn encode(board: Board, out: &mut [f32]) {
     let rooks = board.pieces(Piece::Rook);
     let queens = board.pieces(Piece::Queen);
     let kings = board.pieces(Piece::King);
-    let white = board.color_combined(Color::White);
-    let black = board.color_combined(Color::Black);
+    let mut white = board.color_combined(Color::White);
+    let mut black = board.color_combined(Color::Black);
+	let flip = board.side_to_move() == Color::Black;
+
+	if board.side_to_move() == Color::Black {
+		std::mem::swap(&mut white, &mut black);
+	}
+
+	fn to_index(sq: chess::Square, flip: bool) -> usize {
+		if flip { 64 - sq.to_index() } else { sq.to_index() }
+	}
 
     //////////////////// pawns ////////////////////
 
@@ -213,7 +222,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index()] = 1.0;
+        out[to_index(sq, flip)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -222,7 +231,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64] = 1.0;
+        out[to_index(sq, flip) + 64] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -233,7 +242,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 2] = 1.0;
+        out[to_index(sq, flip) + 64 * 2] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -242,7 +251,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 3] = 1.0;
+        out[to_index(sq, flip) + 64 * 3] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -253,7 +262,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 4] = 1.0;
+        out[to_index(sq, flip) + 64 * 4] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -262,7 +271,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 5] = 1.0;
+        out[to_index(sq, flip) + 64 * 5] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -273,7 +282,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 6] = 1.0;
+        out[to_index(sq, flip) + 64 * 6] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -282,7 +291,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 7] = 1.0;
+        out[to_index(sq, flip) + 64 * 7] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -293,7 +302,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 8] = 1.0;
+        out[to_index(sq, flip) + 64 * 8] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -302,7 +311,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 9] = 1.0;
+        out[to_index(sq, flip) + 64 * 9] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -313,7 +322,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 10] = 1.0;
+        out[to_index(sq, flip) + 64 * 10] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -322,7 +331,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[sq.to_index() + 64 * 11] = 1.0;
+        out[to_index(sq, flip) + 64 * 11] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
