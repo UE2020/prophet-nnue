@@ -35,9 +35,8 @@ type MaxBlock =	((BasicBlock<32>, ReLU), (BasicBlock<32>, ReLU), (BasicBlock<32>
 
 type Model = (
     ((Conv2D<12, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
-	MaxBlock,
-	MaxBlock,
-	MaxBlock,
+	(BasicBlock<32>, ReLU),
+	(BasicBlock<32>, ReLU),
     ((Conv2D<32, 1, 1>, BatchNorm2D<1>), ReLU),
     (Flatten2D, Linear<64, 256>, ReLU, Linear<256, 1>, Tanh),
     //(Linear<128, 1>, Tanh)
