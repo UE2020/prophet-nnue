@@ -17,7 +17,7 @@ use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{str::FromStr, time::Instant, vec};
 
-type Device = dfdx::tensor::Cpu;
+type Device = dfdx::tensor::Cuda;
 
 type BasicBlock<const C: usize> = Residual<(
     Conv2D<C, C, 3, 1, 1>,
