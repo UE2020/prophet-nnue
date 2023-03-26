@@ -80,7 +80,7 @@ pub fn main() {
     };
 
     for result in rdr.records() {
-        if game > 501000 {
+        if game > 510000 {
             break;
         }
         let record = result.unwrap();
