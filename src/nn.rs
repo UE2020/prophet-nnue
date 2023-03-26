@@ -62,7 +62,7 @@ pub fn main() {
     let mut opt = Adam::new(
         &model,
         AdamConfig {
-			//weight_decay: Some(WeightDecay::L2(0.0001)),
+			weight_decay: Some(WeightDecay::L2(0.0001)),
             ..Default::default()
         },
     );
@@ -83,7 +83,7 @@ pub fn main() {
     };
 
     for result in rdr.records() {
-        if game > 1001000 {
+        if game > 501000 {
             break;
         }
         let record = result.unwrap();
@@ -107,7 +107,7 @@ pub fn main() {
 			-eval
 		};
 
-        if game > 1000000 {
+        if game > 500000 {
             test_positions.input.push(input);
             test_positions.labels.push(eval as f32 / 2000.0);
         } else {
