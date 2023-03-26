@@ -2,16 +2,13 @@ use dfdx::{
     data::*,
     losses::mse_loss,
     nn::SaveToNpz,
-    optim::{Adam, AdamConfig, Momentum, Optimizer, Sgd, SgdConfig, WeightDecay},
+    optim::*,
     prelude::*,
-    tensor::TensorFrom,
-    tensor::TensorFromVec,
-    tensor::{AsArray, DeviceStorage, Trace},
+    tensor::*,
     tensor_ops::Backward,
 };
 
 use chess::*;
-
 use crate::search::eval;
 use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
