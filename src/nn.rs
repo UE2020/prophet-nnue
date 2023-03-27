@@ -57,10 +57,12 @@ pub fn main() {
 	println!("Number of trainable parameters: {:.2}k", model.num_trainable_params()/1000);
     let mut grads = model.alloc_grads();
 
-    let mut opt = Adam::new(
+    let mut opt = Sgd::new(
         &model,
-        AdamConfig {
-			weight_decay: Some(WeightDecay::Decoupled(0.0001)),
+        SgdConfig {
+            lr: 0.1,
+            momentum: Some(Momentum::Nesterov((0.9))),
+			//weight_decay: Some(WeightDecay::Decoupled(0.001)),
             ..Default::default()
         },
     );
