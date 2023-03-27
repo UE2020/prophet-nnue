@@ -80,7 +80,7 @@ pub fn main() {
     };
 
     for result in rdr.records() {
-        if game > 510000 {
+        if game > 10010000 {
             break;
         }
         let record = result.unwrap();
@@ -104,7 +104,7 @@ pub fn main() {
 			-eval
 		};
 
-        if game > 500000 {
+        if game > 10000000 {
             test_positions.input.push(input);
             test_positions.labels.push(eval as f32 / 2000.0);
         } else {
