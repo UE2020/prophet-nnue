@@ -60,7 +60,7 @@ pub fn main() {
     let mut opt = Sgd::new(
         &model,
         SgdConfig {
-            lr: 0.1,
+            lr: 0.01,
             momentum: Some(Momentum::Nesterov((0.9))),
 			//weight_decay: Some(WeightDecay::Decoupled(0.001)),
             ..Default::default()
