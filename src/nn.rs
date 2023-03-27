@@ -54,12 +54,13 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<Model, f32>();
+	println!("Number of trainable parameters: {:.2}k", model.num_trainable_params()/1000);
     let mut grads = model.alloc_grads();
 
     let mut opt = Adam::new(
         &model,
         AdamConfig {
-			weight_decay: Some(WeightDecay::Decoupled(0.001)),
+			weight_decay: Some(WeightDecay::Decoupled(0.01)),
             ..Default::default()
         },
     );
