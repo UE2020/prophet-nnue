@@ -1,20 +1,14 @@
 use dfdx::{
-    data::*,
-    losses::mse_loss,
-    nn::SaveToNpz,
-    optim::*,
-    prelude::*,
-    tensor::*,
-    tensor_ops::Backward,
+    data::*, losses::mse_loss, nn::SaveToNpz, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
 };
 
-use chess::*;
 use crate::search::eval;
+use chess::*;
 use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{str::FromStr, time::Instant, vec};
 
-type Device = dfdx::tensor::Cuda;
+type Device = dfdx::tensor::Cpu;
 
 pub type BasicBlock<const C: usize> = Residual<(
     Conv2D<C, C, 3, 1, 1>,
@@ -25,13 +19,16 @@ pub type BasicBlock<const C: usize> = Residual<(
 )>;
 
 pub type Model = (
-    ((Conv2D<12, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
-	(BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
-	(BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
-	(BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
-    ((Conv2D<32, 1, 1>, BatchNorm2D<1>), ReLU),
-    (Flatten2D, Linear<64, 256>, ReLU, Linear<256, 1>, Tanh),
-    //(Linear<128, 1>, Tanh)
+    (Linear<832, 1024>, ReLU, DropoutOneIn<2>),
+    (Linear<1024, 1024>, ReLU, DropoutOneIn<2>),
+    Linear<1024, 1>,
+    Tanh, /*((Conv2D<12, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
+          (BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
+          (BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
+          (BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
+          ((Conv2D<32, 1, 1>, BatchNorm2D<1>), ReLU),
+          (Flatten2D, Linear<64, 256>, ReLU, Linear<256, 1>, Tanh),*/
+          //(Linear<128, 1>, Tanh)
 );
 
 pub struct Positions {
@@ -54,7 +51,10 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<Model, f32>();
-	println!("Number of trainable parameters: {:.2}k", model.num_trainable_params()/1000);
+    println!(
+        "Number of trainable parameters: {:.2}m",
+        model.num_trainable_params() as f32 / 1000000 as f32
+    );
     let mut grads = model.alloc_grads();
 
     let mut opt = Sgd::new(
@@ -62,7 +62,7 @@ pub fn main() {
         SgdConfig {
             lr: 0.01,
             momentum: Some(Momentum::Nesterov((0.9))),
-			//weight_decay: Some(WeightDecay::Decoupled(0.001)),
+            //weight_decay: Some(WeightDecay::Decoupled(0.001)),
             ..Default::default()
         },
     );
@@ -98,22 +98,22 @@ pub fn main() {
             continue;
         }
 
-        let mut input = vec![0f32; 768];
+        let mut input = vec![0f32; 832];
         encode(board, &mut input);
 
-		let eval = if board.side_to_move() == Color::White {
-			eval
-		} else {
-			-eval
-		};
+        let eval = if board.side_to_move() == Color::White {
+            eval
+        } else {
+            -eval
+        };
 
         if game > 1000000 {
             test_positions.input.push(input);
             test_positions.labels.push(eval as f32 / 2000.0);
         } else {
-			train_positions.input.push(input);
+            train_positions.input.push(input);
             train_positions.labels.push(eval as f32 / 2000.0);
-		}
+        }
 
         game += 1;
     }
@@ -124,7 +124,7 @@ pub fn main() {
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<12>, Const::<8>, Const::<8>)),
+            dev.tensor_from_vec(input, (Const::<832>,)),
             dev.tensor([lbl]),
         )
     };
@@ -173,12 +173,12 @@ pub fn main() {
             test_num_batches += 1;
         }
 
-		println!(
+        println!(
             "Epoch {i_epoch} in {:?} ({:.3} batches/s): avg sample loss {:.5}; test loss {:.5}",
             dur,
             num_batches as f32 / dur.as_secs_f32(),
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
-			BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
+            BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
         );
 
         if (BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32) <= 0.01 {
@@ -202,15 +202,19 @@ pub fn encode(board: Board, out: &mut [f32]) {
     let kings = board.pieces(Piece::King);
     let mut white = board.color_combined(Color::White);
     let mut black = board.color_combined(Color::Black);
-	let flip = board.side_to_move() == Color::Black;
+    let flip = board.side_to_move() == Color::Black;
 
-	if board.side_to_move() == Color::Black {
-		std::mem::swap(&mut white, &mut black);
-	}
+    if board.side_to_move() == Color::Black {
+        std::mem::swap(&mut white, &mut black);
+    }
 
-	fn to_index(sq: chess::Square, flip: bool) -> usize {
-		if flip { 63 - sq.to_index() } else { sq.to_index() }
-	}
+    fn to_index(sq: chess::Square, flip: bool) -> usize {
+        if flip {
+            63 - sq.to_index()
+        } else {
+            sq.to_index()
+        }
+    }
 
     //////////////////// pawns ////////////////////
 
@@ -330,5 +334,10 @@ pub fn encode(board: Board, out: &mut [f32]) {
         out[to_index(sq, flip) + 64 * 11] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
+    }
+
+    let movegen = MoveGen::new_legal(&board);
+    for mov in movegen {
+        out[to_index(mov.get_dest(), flip) + 64 * 12] = 1.0;
     }
 }
