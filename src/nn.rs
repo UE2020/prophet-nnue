@@ -100,6 +100,7 @@ pub fn main() {
             test_positions.input.push(input);
 
             test_positions.labels.push(eval as f32 / 2000.0);
+			train_positions.labels.push(eval as f32 / 2000.0);
         } else {
 			let mut input = vec![0f32; 769];
 			encode(board, &mut input, false);
@@ -110,6 +111,7 @@ pub fn main() {
             test_positions.input.push(input);
 
             train_positions.labels.push(eval as f32 / 2000.0);
+			train_positions.labels.push(eval as f32 / 2000.0);
         }
 
         game += 1;
