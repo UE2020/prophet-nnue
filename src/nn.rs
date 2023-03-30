@@ -10,25 +10,11 @@ use std::{str::FromStr, time::Instant, vec};
 
 type Device = dfdx::tensor::Cuda;
 
-pub type BasicBlock<const C: usize> = Residual<(
-    Conv2D<C, C, 3, 1, 1>,
-    BatchNorm2D<C>,
-    ReLU,
-    Conv2D<C, C, 3, 1, 1>,
-    BatchNorm2D<C>,
-)>;
-
 pub type Model = (
-    (Linear<832, 1024>, ReLU, DropoutOneIn<4>),
+    (Linear<769, 1024>, ReLU, DropoutOneIn<4>),
     (Linear<1024, 1024>, ReLU, DropoutOneIn<4>),
     Linear<1024, 1>,
-    Tanh, /*((Conv2D<12, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
-          (BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
-          (BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
-          (BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
-          ((Conv2D<32, 1, 1>, BatchNorm2D<1>), ReLU),
-          (Flatten2D, Linear<64, 256>, ReLU, Linear<256, 1>, Tanh),*/
-          //(Linear<128, 1>, Tanh)
+    Tanh
 );
 
 pub struct Positions {
@@ -98,9 +84,6 @@ pub fn main() {
             continue;
         }
 
-        let mut input = vec![0f32; 832];
-        encode(board, &mut input);
-
         let eval = if board.side_to_move() == Color::White {
             eval
         } else {
@@ -108,9 +91,24 @@ pub fn main() {
         };
 
         if game > 1000000 {
+			let mut input = vec![0f32; 769];
+			encode(board, &mut input, false);
             test_positions.input.push(input);
+
+			let mut input = vec![0f32; 769];
+			encode(board, &mut input, true);
+            test_positions.input.push(input);
+
             test_positions.labels.push(eval as f32 / 2000.0);
         } else {
+			let mut input = vec![0f32; 769];
+			encode(board, &mut input, false);
+            test_positions.input.push(input);
+
+			let mut input = vec![0f32; 769];
+			encode(board, &mut input, true);
+            test_positions.input.push(input);
+
             train_positions.input.push(input);
             train_positions.labels.push(eval as f32 / 2000.0);
         }
@@ -124,7 +122,7 @@ pub fn main() {
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<832>,)),
+            dev.tensor_from_vec(input, (Const::<769>,)),
             dev.tensor([lbl]),
         )
     };
@@ -188,7 +186,7 @@ pub fn main() {
     //mlp.save("conv_model.npz").unwrap();
 }
 
-pub fn encode(board: Board, out: &mut [f32]) {
+pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     let pawns = board.pieces(Piece::Pawn);
     let knights = board.pieces(Piece::Knight);
     let bishops = board.pieces(Piece::Bishop);
@@ -197,7 +195,7 @@ pub fn encode(board: Board, out: &mut [f32]) {
     let kings = board.pieces(Piece::King);
     let mut white = board.color_combined(Color::White);
     let mut black = board.color_combined(Color::Black);
-    let flip = board.side_to_move() == Color::Black;
+    let is_black = board.side_to_move() == Color::Black;
 
     if board.side_to_move() == Color::Black {
         std::mem::swap(&mut white, &mut black);
@@ -332,8 +330,9 @@ pub fn encode(board: Board, out: &mut [f32]) {
         remaining ^= BitBoard::from_square(sq);
     }
 
-    let movegen = MoveGen::new_legal(&board);
-    for mov in movegen {
-        out[to_index(mov.get_dest(), flip) + 64 * 12] = 1.0;
-    }
+    out[768] = if is_black {
+		-1.0
+	} else {
+		1.0
+	};
 }

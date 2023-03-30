@@ -34,7 +34,7 @@ use rand::prelude::{SeedableRng, StdRng};
 fn main() {
     nn::main();
 }
-fn unused() {
+/*fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
@@ -145,6 +145,15 @@ fn unused() {
                         best_move = Some(mov);
                     }
                 }
+
+				let mut board_tensor = vec![0f32; 832];
+				nn::encode(board, &mut board_tensor);
+				let test_tensor =
+					dev.tensor_from_vec(board_tensor, (Const::<832>,));
+				let logits = model.forward(test_tensor);
+				let score = logits.array()[0] * 20.0;
+
+				println!("info currmove {}  depth 1 score cp {} pv {}", best_move.unwrap(), (score * 100.0) as i32, best_move.unwrap());
                 println!("bestmove {}", best_move.unwrap());
                 //let result = search::search(board);
                 //println!("bestmove {}", result.0);
@@ -156,3 +165,4 @@ fn unused() {
         }
     }
 }
+*/
