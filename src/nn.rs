@@ -6,7 +6,7 @@ use crate::search::eval;
 use chess::*;
 use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
-use std::{str::FromStr, time::Instant, vec};
+use std::{str::FromStr, time::Instant, vec, default};
 
 type Device = dfdx::tensor::Cuda;
 
@@ -44,13 +44,7 @@ pub fn main() {
 
     let mut opt = Adam::new(
         &model,
-        AdamConfig {
-            lr: 0.001,
-			betas: [0.90, 0.99],
-			eps: 1.918281828, // what the hell is 1e-0.8??
-            //weight_decay: Some(WeightDecay::Decoupled(0.001)),
-            ..Default::default()
-        },
+        AdamConfig::default(),
     );
 
     // read csv
