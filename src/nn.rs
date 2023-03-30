@@ -19,8 +19,8 @@ pub type BasicBlock<const C: usize> = Residual<(
 )>;
 
 pub type Model = (
-    (Linear<832, 1024>, ReLU, DropoutOneIn<2>),
-    (Linear<1024, 1024>, ReLU, DropoutOneIn<2>),
+    (Linear<832, 1024>, ReLU, DropoutOneIn<4>),
+    (Linear<1024, 1024>, ReLU, DropoutOneIn<4>),
     Linear<1024, 1>,
     Tanh, /*((Conv2D<12, 32, 3, 1, 1>, BatchNorm2D<32>), ReLU),
           (BasicBlock<32>, ReLU, BasicBlock<32>, ReLU),
@@ -69,7 +69,7 @@ pub fn main() {
 
     // read csv
     println!("Gathering data...");
-    let file = std::fs::File::open("chessData.csv").expect("file not found");
+    let file = std::fs::File::open("tactic_evals.csv").expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
     let mut game = 0;
     let mut train_positions = Positions {
@@ -129,6 +129,7 @@ pub fn main() {
         )
     };
 
+	println!("Epoch\tTrain Loss\tTest Loss");
     for i_epoch in 0..1000 {
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
@@ -174,9 +175,7 @@ pub fn main() {
         }
 
         println!(
-            "Epoch {i_epoch} in {:?} ({:.3} batches/s): avg sample loss {:.5}; test loss {:.5}",
-            dur,
-            num_batches as f32 / dur.as_secs_f32(),
+            "{i_epoch}\t{:.5}\t{:.5}",
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
             BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
         );
@@ -187,10 +186,6 @@ pub fn main() {
     }
 
     //mlp.save("conv_model.npz").unwrap();
-}
-
-fn flatten<T>(nested: Vec<Vec<T>>) -> Vec<T> {
-    nested.into_iter().flatten().collect()
 }
 
 pub fn encode(board: Board, out: &mut [f32]) {
@@ -210,7 +205,8 @@ pub fn encode(board: Board, out: &mut [f32]) {
 
     fn to_index(sq: chess::Square, flip: bool) -> usize {
         if flip {
-            63 - sq.to_index()
+			// https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating
+            sq.to_index() ^ 56
         } else {
             sq.to_index()
         }
