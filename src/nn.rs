@@ -100,15 +100,15 @@ pub fn main() {
             test_positions.input.push(input);
 
             test_positions.labels.push(eval as f32 / 2000.0);
-			train_positions.labels.push(eval as f32 / 2000.0);
+			test_positions.labels.push(eval as f32 / 2000.0);
         } else {
 			let mut input = vec![0f32; 769];
 			encode(board, &mut input, false);
-            test_positions.input.push(input);
+            train_positions.input.push(input);
 
 			let mut input = vec![0f32; 769];
 			encode(board, &mut input, true);
-            test_positions.input.push(input);
+            train_positions.input.push(input);
 
             train_positions.labels.push(eval as f32 / 2000.0);
 			train_positions.labels.push(eval as f32 / 2000.0);
