@@ -34,7 +34,7 @@ use rand::prelude::{SeedableRng, StdRng};
 fn main() {
     nn::main();
 }
-/*fn main() {
+fn a() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
@@ -134,11 +134,11 @@ fn main() {
                 let mut best_score = -20.0;
                 let movegen = MoveGen::new_legal(&board);
                 for mov in movegen {
-                    let mut board_tensor = vec![0f32; 832];
+                    let mut board_tensor = vec![0f32; 769];
                     let board = board.make_move_new(mov);
-                    nn::encode(board, &mut board_tensor);
+                    nn::encode(board, &mut board_tensor, false);
                     let test_tensor =
-                        dev.tensor_from_vec(board_tensor, (Const::<832>,));
+                        dev.tensor_from_vec(board_tensor, (Const::<769>,));
                     let logits = model.forward(test_tensor);
                     if (-logits.array()[0] * 20.0) > best_score {
                         best_score = -logits.array()[0] * 20.0;
@@ -146,10 +146,10 @@ fn main() {
                     }
                 }
 
-				let mut board_tensor = vec![0f32; 832];
-				nn::encode(board, &mut board_tensor);
+				let mut board_tensor = vec![0f32; 769];
+				nn::encode(board, &mut board_tensor, false);
 				let test_tensor =
-					dev.tensor_from_vec(board_tensor, (Const::<832>,));
+					dev.tensor_from_vec(board_tensor, (Const::<769>,));
 				let logits = model.forward(test_tensor);
 				let score = logits.array()[0] * 20.0;
 
@@ -165,4 +165,3 @@ fn main() {
         }
     }
 }
-*/

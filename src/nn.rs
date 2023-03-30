@@ -13,17 +13,17 @@ type Device = dfdx::tensor::Cuda;
 pub type Model = (
     (Linear<769, 1024>, ReLU, DropoutOneIn<4>),
     (Linear<1024, 1024>, ReLU, DropoutOneIn<4>),
-    Linear<1024, 1>,
-    Tanh
+    Linear<1024, 3>,
+    Softmax,
 );
 
 pub struct Positions {
     input: Vec<Vec<f32>>,
-    labels: Vec<f32>,
+    labels: Vec<[f32; 3]>,
 }
 
 impl ExactSizeDataset for Positions {
-    type Item<'a> = (Vec<f32>, f32) where Self: 'a;
+    type Item<'a> = (Vec<f32>, [f32; 3]) where Self: 'a;
     fn get(&self, index: usize) -> Self::Item<'_> {
         (self.input[index].clone(), self.labels[index])
     }
@@ -43,11 +43,12 @@ pub fn main() {
     );
     let mut grads = model.alloc_grads();
 
-    let mut opt = Sgd::new(
+    let mut opt = Adam::new(
         &model,
-        SgdConfig {
-            lr: 0.01,
-            momentum: Some(Momentum::Nesterov((0.9))),
+        AdamConfig {
+            lr: 0.001,
+			betas: [0.90, 0.99],
+			eps: 1.918281828, // what the hell is 1e-0.8??
             //weight_decay: Some(WeightDecay::Decoupled(0.001)),
             ..Default::default()
         },
@@ -90,6 +91,16 @@ pub fn main() {
             -eval
         };
 
+		let eval = if eval.abs() <= 100 {
+			[0.0, 1.0, 0.0]
+		} else {
+			if eval.signum() == 1 {
+				[0.0, 0.0, 1.0]
+			} else {
+				[1.0, 0.0, 0.0]
+			}
+		};
+
         if game > 1000000 {
 			let mut input = vec![0f32; 769];
 			encode(board, &mut input, false);
@@ -99,8 +110,8 @@ pub fn main() {
 			encode(board, &mut input, true);
             test_positions.input.push(input);
 
-            test_positions.labels.push(eval as f32 / 2000.0);
-			test_positions.labels.push(eval as f32 / 2000.0);
+            test_positions.labels.push(eval);
+			test_positions.labels.push(eval);
         } else {
 			let mut input = vec![0f32; 769];
 			encode(board, &mut input, false);
@@ -110,8 +121,8 @@ pub fn main() {
 			encode(board, &mut input, true);
             train_positions.input.push(input);
 
-            train_positions.labels.push(eval as f32 / 2000.0);
-			train_positions.labels.push(eval as f32 / 2000.0);
+            train_positions.labels.push(eval);
+			train_positions.labels.push(eval);
         }
 
         game += 1;
@@ -119,12 +130,12 @@ pub fn main() {
 
     println!("Done!");
 
-    const BATCH_SIZE: usize = 64;
+    const BATCH_SIZE: usize = 128;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
             dev.tensor_from_vec(input, (Const::<769>,)),
-            dev.tensor([lbl]),
+            dev.tensor(lbl),
         )
     };
 
@@ -142,7 +153,7 @@ pub fn main() {
             .progress()
         {
             let logits = model.forward_mut(input.traced(grads));
-            let loss = mse_loss(logits, label);
+            let loss = cross_entropy_with_logits_loss(logits, label);
 
             total_epoch_loss += loss.array();
             //dbg!(loss.array());
@@ -194,13 +205,9 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     let rooks = board.pieces(Piece::Rook);
     let queens = board.pieces(Piece::Queen);
     let kings = board.pieces(Piece::King);
-    let mut white = board.color_combined(Color::White);
-    let mut black = board.color_combined(Color::Black);
+    let white = board.color_combined(Color::White);
+    let black = board.color_combined(Color::Black);
     let is_black = board.side_to_move() == Color::Black;
-
-    if board.side_to_move() == Color::Black {
-        std::mem::swap(&mut white, &mut black);
-    }
 
     fn to_index(sq: chess::Square, flip: bool) -> usize {
         if flip {
