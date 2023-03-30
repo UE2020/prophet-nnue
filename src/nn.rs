@@ -13,8 +13,7 @@ type Device = dfdx::tensor::Cuda;
 pub type Model = (
     (Linear<769, 1024>, ReLU, DropoutOneIn<4>),
     (Linear<1024, 1024>, ReLU, DropoutOneIn<4>),
-    Linear<1024, 3>,
-    Softmax,
+    Linear<1024, 3>
 );
 
 pub struct Positions {
