@@ -109,7 +109,6 @@ pub fn main() {
 			encode(board, &mut input, true);
             test_positions.input.push(input);
 
-            train_positions.input.push(input);
             train_positions.labels.push(eval as f32 / 2000.0);
         }
 
