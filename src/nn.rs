@@ -11,7 +11,7 @@ use std::{str::FromStr, time::Instant, vec, default};
 type Device = dfdx::tensor::Cuda;
 
 pub type Model = (
-    (Linear<769, 1024>, ReLU, DropoutOneIn<4>),
+    (Linear<768, 1024>, ReLU, DropoutOneIn<4>),
     (Linear<1024, 1024>, ReLU, DropoutOneIn<4>),
     Linear<1024, 3>
 );
@@ -74,10 +74,6 @@ pub fn main() {
             Err(_) => continue,
         };
 
-        if eval.abs() < 100 {
-            continue;
-        }
-
 		let eval = if eval.abs() <= 100 {
 			[0.0, 1.0, 0.0]
 		} else {
@@ -89,22 +85,22 @@ pub fn main() {
 		};
 
         if game > 1000000 {
-			let mut input = vec![0f32; 769];
+			let mut input = vec![0f32; 768];
 			encode(board, &mut input, false);
             test_positions.input.push(input);
 
-			let mut input = vec![0f32; 769];
+			let mut input = vec![0f32; 768];
 			encode(board, &mut input, true);
             test_positions.input.push(input);
 
             test_positions.labels.push(eval);
 			test_positions.labels.push(eval);
         } else {
-			let mut input = vec![0f32; 769];
+			let mut input = vec![0f32; 768];
 			encode(board, &mut input, false);
             train_positions.input.push(input);
 
-			let mut input = vec![0f32; 769];
+			let mut input = vec![0f32; 768];
 			encode(board, &mut input, true);
             train_positions.input.push(input);
 
@@ -121,7 +117,7 @@ pub fn main() {
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<769>,)),
+            dev.tensor_from_vec(input, (Const::<768>,)),
             dev.tensor(lbl),
         )
     };
@@ -192,9 +188,13 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     let rooks = board.pieces(Piece::Rook);
     let queens = board.pieces(Piece::Queen);
     let kings = board.pieces(Piece::King);
-    let white = board.color_combined(Color::White);
-    let black = board.color_combined(Color::Black);
+    let mut white = board.color_combined(Color::White);
+    let mut black = board.color_combined(Color::Black);
     let is_black = board.side_to_move() == Color::Black;
+
+    if is_black {
+        std::mem::swap(&mut white, &mut black);
+    }
 
     fn to_index(sq: chess::Square, flip: bool) -> usize {
         if flip {
@@ -324,10 +324,4 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
 
         remaining ^= BitBoard::from_square(sq);
     }
-
-    out[768] = if is_black {
-		-1.0
-	} else {
-		1.0
-	};
 }

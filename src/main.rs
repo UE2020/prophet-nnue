@@ -34,7 +34,7 @@ use rand::prelude::{SeedableRng, StdRng};
 fn main() {
     nn::main();
 }
-fn a() {
+/*fn a() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
@@ -164,4 +164,4 @@ fn a() {
             _ => {}
         }
     }
-}
+}*/
