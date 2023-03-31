@@ -8,12 +8,12 @@ use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{str::FromStr, time::Instant, vec, default};
 
-type Device = dfdx::tensor::Cuda;
+type Device = dfdx::tensor::Cpu;
 
 pub type Model = (
-    (Linear<768, 1024>, ReLU, DropoutOneIn<4>),
-    (Linear<1024, 1024>, ReLU, DropoutOneIn<4>),
-    Linear<1024, 3>
+    (Linear<768, 256>, ReLU, DropoutOneIn<4>),
+    (Linear<256, 128>, ReLU, DropoutOneIn<4>),
+    Linear<128, 3>
 );
 
 pub struct Positions {
@@ -36,9 +36,10 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<Model, f32>();
+    //model.load("conv_model.npz");
     println!(
-        "Number of trainable parameters: {:.2}m",
-        model.num_trainable_params() as f32 / 1000000 as f32
+        "Number of trainable parameters: {:.2}k",
+        model.num_trainable_params() as f32 / 1000 as f32
     );
     let mut grads = model.alloc_grads();
 
@@ -68,11 +69,19 @@ pub fn main() {
         }
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
-        let eval = record[1].parse::<i32>();
+        /*let eval = record[1].parse::<i32>();
         let eval = match eval {
             Ok(eval) => eval.clamp(-2000, 2000),
             Err(_) => continue,
         };
+
+        let eval = if board.side_to_move() == Color::Black {
+            -eval
+        } else {
+            eval
+        };*/
+
+        let eval = (eval(board) * 100).clamp(-2000, 2000);
 
 		let eval = if eval.abs() <= 100 {
 			[0.0, 1.0, 0.0]
@@ -161,7 +170,7 @@ pub fn main() {
             .stack()
         {
             let logits = model.forward(input);
-            let loss = mse_loss(logits, label);
+            let loss = cross_entropy_with_logits_loss(logits, label);
 
             test_total_epoch_loss += loss.array();
             test_num_batches += 1;
