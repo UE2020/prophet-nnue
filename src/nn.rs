@@ -78,12 +78,6 @@ pub fn main() {
             continue;
         }
 
-        let eval = if board.side_to_move() == Color::White {
-            eval
-        } else {
-            -eval
-        };
-
 		let eval = if eval.abs() <= 100 {
 			[0.0, 1.0, 0.0]
 		} else {
