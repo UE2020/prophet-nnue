@@ -11,7 +11,7 @@ use std::{str::FromStr, time::Instant, vec, default};
 type Device = dfdx::tensor::Cpu;
 
 pub type Model = (
-    (Linear<768, 256>, ReLU, DropoutOneIn<4>),
+    (Linear<896, 256>, ReLU, DropoutOneIn<4>),
     (Linear<256, 128>, ReLU, DropoutOneIn<4>),
     Linear<128, 3>
 );
@@ -69,7 +69,7 @@ pub fn main() {
         }
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
-        /*let eval = record[1].parse::<i32>();
+        let eval = record[1].parse::<i32>();
         let eval = match eval {
             Ok(eval) => eval.clamp(-2000, 2000),
             Err(_) => continue,
@@ -79,9 +79,9 @@ pub fn main() {
             -eval
         } else {
             eval
-        };*/
+        };
 
-        let eval = (eval(board) * 100).clamp(-2000, 2000);
+        //let eval = (eval(board) * 100).clamp(-2000, 2000);
 
 		let eval = if eval.abs() <= 100 {
 			[0.0, 1.0, 0.0]
@@ -94,22 +94,22 @@ pub fn main() {
 		};
 
         if game > 1000000 {
-			let mut input = vec![0f32; 768];
+			let mut input = vec![0f32; 896];
 			encode(board, &mut input, false);
             test_positions.input.push(input);
 
-			let mut input = vec![0f32; 768];
+			let mut input = vec![0f32; 896];
 			encode(board, &mut input, true);
             test_positions.input.push(input);
 
             test_positions.labels.push(eval);
 			test_positions.labels.push(eval);
         } else {
-			let mut input = vec![0f32; 768];
+			let mut input = vec![0f32; 896];
 			encode(board, &mut input, false);
             train_positions.input.push(input);
 
-			let mut input = vec![0f32; 768];
+			let mut input = vec![0f32; 896];
 			encode(board, &mut input, true);
             train_positions.input.push(input);
 
@@ -126,7 +126,7 @@ pub fn main() {
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<768>,)),
+            dev.tensor_from_vec(input, (Const::<896>,)),
             dev.tensor(lbl),
         )
     };
@@ -332,5 +332,20 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
         out[to_index(sq, flip) + 64 * 11] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
+    }
+
+    let mut movegen = MoveGen::new_legal(&board);
+    movegen.set_iterator_mask(*black); // calculate attacks
+    for mov in movegen {
+        out[to_index(mov.get_dest(), flip) + 64 * 12] = 1.0;
+    }
+
+    let board = board.null_move();
+    if let Some(board) = board {
+        let mut movegen = MoveGen::new_legal(&board);
+        movegen.set_iterator_mask(*white); // calculate attacks
+        for mov in movegen {
+            out[to_index(mov.get_dest(), flip) + 64 * 13] = 1.0;
+        }
     }
 }

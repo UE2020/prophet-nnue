@@ -33,6 +33,23 @@ use rand::prelude::{SeedableRng, StdRng};
 
 fn main() {
     nn::main();
+    return;
+    let dev = Device::default();
+    let mut rng = StdRng::seed_from_u64(0);
+
+    let mut model = dev.build_module::<nn::Model, f32>();
+    model.load("conv_model.npz").unwrap();
+    let mut board_tensor = vec![0.0; 896];
+    let board = Board::from_str("r3k2r/1pp2ppp/p1B4n/8/4P3/7P/PPP2PP1/R1K4R b kq - 0 16").expect("bad fen");
+    nn::encode(board, &mut board_tensor, false);
+    let logits = model.forward(dev.tensor_from_vec(board_tensor, (Const::<896>,)));
+    let logits_array = logits.softmax().array();
+    
+    println!("Side to move: {:?}", board.side_to_move());
+    println!("EMEMY winning: {:.2}%", logits_array[0] * 100.0);
+    println!("DRAWN: {:.2}%", logits_array[1] * 100.0);
+    println!("PRIMARY winning: {:.2}%", logits_array[2] * 100.0);
+    //nn::main();
 }
 /*fn a() {
     let dev = Device::default();
@@ -134,11 +151,11 @@ fn main() {
                 let mut best_score = -20.0;
                 let movegen = MoveGen::new_legal(&board);
                 for mov in movegen {
-                    let mut board_tensor = vec![0f32; 769];
+                    let mut board_tensor = vec![0f32; 768];
                     let board = board.make_move_new(mov);
                     nn::encode(board, &mut board_tensor, false);
                     let test_tensor =
-                        dev.tensor_from_vec(board_tensor, (Const::<769>,));
+                        dev.tensor_from_vec(board_tensor, (Const::<768>,));
                     let logits = model.forward(test_tensor);
                     if (-logits.array()[0] * 20.0) > best_score {
                         best_score = -logits.array()[0] * 20.0;
@@ -146,10 +163,10 @@ fn main() {
                     }
                 }
 
-				let mut board_tensor = vec![0f32; 769];
+				let mut board_tensor = vec![0f32; 768];
 				nn::encode(board, &mut board_tensor, false);
 				let test_tensor =
-					dev.tensor_from_vec(board_tensor, (Const::<769>,));
+					dev.tensor_from_vec(board_tensor, (Const::<768>,));
 				let logits = model.forward(test_tensor);
 				let score = logits.array()[0] * 20.0;
 
