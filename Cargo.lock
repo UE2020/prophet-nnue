@@ -224,9 +224,9 @@ dependencies = [
 
 [[package]]
 name = "cudarc"
-version = "0.9.1"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c733b8c19afbbff207212cfd8935b82363825996026dd66d1b7ce7eeec76e6d"
+checksum = "637fe0403a6bca09c7079c032027cfe7520fff3b6c22f16f948b2263ece88a57"
 
 [[package]]
 name = "cxx"
@@ -275,8 +275,7 @@ dependencies = [
 [[package]]
 name = "dfdx"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b707073d8071b53bef150660dca18d06705aee85e00a6b214b5f4bae3493bef7"
+source = "git+https://github.com/UE2020/dfdx.git#cc91fa0455b9e5eeaaaa8ede43b7bd46b9bf424b"
 dependencies = [
  "cudarc",
  "matrixmultiply",

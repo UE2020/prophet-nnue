@@ -11,22 +11,90 @@ pub use table::*;
 
 use chess::*;
 
-const MAX_SEARCH_DEPTH: usize = 25;
+use dfdx::{
+    data::*, losses::mse_loss, nn::modules, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
+};
+
+const MAX_SEARCH_DEPTH: usize = 3;
 const INF: i32 = 20000;
 
 pub type HashTable = CacheTable<TranspositionTableEntry>;
 
-pub fn iterative_deepening_search(board: Board) -> (ChessMove, i32) {
+type Device = dfdx::tensor::Cpu;
+type Model = ((modules::Linear<768, 512, f32, Cpu>, ReLU, DropoutOneIn<5>), (modules::Linear<512, 256, f32, Cpu>, ReLU, DropoutOneIn<5>), (modules::Linear<256, 1, f32, Cpu>, Tanh));
+
+pub fn iterative_deepening_search(board: Board, dev: &Device, net: &Model) -> (ChessMove, i32) {
     // initialize hash table, size: 256
-    //let mut table = CacheTable::new(256, TranspositionTableEntry::default());
+    let mut table = CacheTable::new(256, TranspositionTableEntry::default());
 
-    let mut first_guess = 0;
-
-    for depth in 1..MAX_SEARCH_DEPTH {
+	let mut curr_mov = None;
+	let mut curr_value = 0;
+    for depth in 1..MAX_SEARCH_DEPTH as u8 {
+		let alpha = -2000;
+		let beta = 2000;
+		let (mov, value) = root_search(&mut table, board, alpha, beta, depth, dev, net);
+		curr_mov = Some(mov);
+		curr_value = value;
         //first_guess = mtdf(&mut table, board, first_guess, depth as u8);
     }
 
-    todo!()
+    (curr_mov.expect("no move found"), curr_value)
+}
+
+pub fn root_search(table: &mut HashTable, board: Board, mut alpha: i32, mut beta: i32, depth: u8, dev: &Device, net: &Model) -> (ChessMove, i32) {
+    let alpha_orig = alpha;
+    if let Some(entry) = table.get(board.get_hash()) {
+        if entry.depth >= depth {
+            match entry.flag {
+                TranspositionFlag::Exact => return (entry.mov, entry.value),
+                TranspositionFlag::Lowerbound => alpha = alpha.max(entry.value),
+                TranspositionFlag::Upperbound => beta = beta.min(entry.value),
+            }
+
+            if alpha >= beta {
+                return (entry.mov, entry.value);
+            }
+        }
+    }
+
+    let movegen = MoveGen::new_legal(&board);
+    let mut value = -2000;
+	let mut best_mov = None;
+    for mov in movegen {
+        value = value.max(-negamax(
+            table,
+            board.make_move_new(mov),
+            -beta,
+            -alpha,
+            depth - 1,
+			dev, net,
+        ));
+		if value > alpha {
+			alpha = value;
+			best_mov = Some(mov);
+		}
+
+        if alpha >= beta {
+            break;
+        }
+    }
+
+    let entry = TranspositionTableEntry {
+        flag: if value <= alpha_orig {
+            TranspositionFlag::Upperbound
+        } else if value >= beta {
+            TranspositionFlag::Lowerbound
+        } else {
+            TranspositionFlag::Exact
+        },
+        depth,
+        value,
+		mov: best_mov.unwrap(),
+    };
+
+    table.add(board.get_hash(), entry);
+
+	(best_mov.unwrap(), value)
 }
 
 pub fn negamax(
@@ -35,6 +103,7 @@ pub fn negamax(
     mut alpha: i32,
     mut beta: i32,
     depth: u8,
+	dev: &Device, net: &Model
 ) -> i32 {
     let alpha_orig = alpha;
     if let Some(entry) = table.get(board.get_hash()) {
@@ -52,10 +121,61 @@ pub fn negamax(
     }
 
     if depth == 0 {
-        return eval(board);
+		let mut board_tensor = [0f32; 768];
+		crate::nn::encode(board, &mut board_tensor, false);
+		let test_tensor = dev.tensor(board_tensor);
+		let logits = net.forward(test_tensor);
+        return (logits.array()[0] * 2000.0) as i32;
     }
 
-    todo!()
+	match board.status() {
+		BoardStatus::Checkmate => return -2000,
+		BoardStatus::Stalemate => return 0,
+		_ => {}
+	}
+
+    let movegen = MoveGen::new_legal(&board);
+	let mut best_mov = None;
+    for mov in movegen {
+		let score = -negamax(
+            table,
+            board.make_move_new(mov),
+            -beta,
+            -alpha,
+            depth - 1,
+			dev, net
+        );
+
+		if score >= beta {
+			best_mov = Some(mov);
+			alpha = beta;
+			break;
+		}
+
+		if score > alpha {
+			alpha = score;
+			best_mov = Some(mov);
+		}
+    }
+
+	if let Some(mov) = best_mov {
+		let entry = TranspositionTableEntry {
+			flag: if alpha <= alpha_orig {
+				TranspositionFlag::Upperbound
+			} else if alpha >= beta {
+				TranspositionFlag::Lowerbound
+			} else {
+				TranspositionFlag::Exact
+			},
+			depth,
+			value: alpha,
+			mov,
+		};
+	
+		table.add(board.get_hash(), entry);
+	}
+
+    alpha
 }
 
 /*pub fn mtdf(table: &mut HashTable, board: Board, mut gamma: i32, depth: u8) -> (i32, ChessMove) {

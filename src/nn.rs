@@ -6,23 +6,24 @@ use crate::search::eval;
 use chess::*;
 use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
-use std::{str::FromStr, time::Instant, vec, default};
+use std::{default, str::FromStr, time::Instant, vec};
 
 type Device = dfdx::tensor::Cpu;
 
 pub type Model = (
-    (Linear<896, 256>, ReLU, DropoutOneIn<4>),
-    (Linear<256, 128>, ReLU, DropoutOneIn<4>),
-    Linear<128, 3>
+    (Linear<768, 512>, ReLU, DropoutOneIn<5>),
+    (Linear<512, 256>, ReLU, DropoutOneIn<5>),
+    (Linear<256, 1>, Tanh),
+    //(Linear<128, 1>, Tanh)
 );
 
 pub struct Positions {
     input: Vec<Vec<f32>>,
-    labels: Vec<[f32; 3]>,
+    labels: Vec<f32>,
 }
 
 impl ExactSizeDataset for Positions {
-    type Item<'a> = (Vec<f32>, [f32; 3]) where Self: 'a;
+    type Item<'a> = (Vec<f32>, f32) where Self: 'a;
     fn get(&self, index: usize) -> Self::Item<'_> {
         (self.input[index].clone(), self.labels[index])
     }
@@ -43,14 +44,11 @@ pub fn main() {
     );
     let mut grads = model.alloc_grads();
 
-    let mut opt = Adam::new(
-        &model,
-        AdamConfig::default(),
-    );
+    let mut opt = Adam::new(&model, AdamConfig::default());
 
     // read csv
     println!("Gathering data...");
-    let file = std::fs::File::open("tactic_evals.csv").expect("file not found");
+    let file = std::fs::File::open("chessData.csv").expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
     let mut game = 0;
     let mut train_positions = Positions {
@@ -63,17 +61,57 @@ pub fn main() {
         labels: vec![],
     };
 
+    use std::io::{Read, Write};
+    use std::process::{Command, Stdio};
+    let mut child = Command::new("/bin/stockfish")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("failed to execute child");
+
     for result in rdr.records() {
         if game > 1010000 {
             break;
         }
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
-        let eval = record[1].parse::<i32>();
-        let eval = match eval {
-            Ok(eval) => eval.clamp(-2000, 2000),
-            Err(_) => continue,
+        let child_stdin = child.stdin.as_mut().unwrap();
+        child_stdin
+            .write_all(format!("position fen {}\neval\n", &record[0]).as_bytes())
+            .expect("failed to write");
+        drop(child_stdin);
+        let child_stdout = child.stdout.as_mut().unwrap();
+        let eval = 'outer: loop {
+            let mut bytes = vec![];
+            loop {
+                // read a char
+                let mut output = [0];
+                child_stdout
+                    .read_exact(&mut output)
+                    .expect("Failed to read output");
+                if output[0] as char == '\n' {
+                    break;
+                }
+                bytes.push(output[0]);
+            }
+            let mut output = String::from_utf8_lossy(&bytes).to_string();
+            if output.starts_with("Final evaluation") {
+                loop {
+                    let c = output.remove(0);
+                    if c == ' ' {
+						let new = output.trim_start();
+                        break 'outer new.parse::<i32>();
+                    }
+                }
+            }
         };
+
+        let eval = record[1].parse::<i32>();
+		let eval = match eval {
+			Ok(eval) => eval.clamp(-2000, 2000),
+			Err(_) => continue,
+		};
 
         let eval = if board.side_to_move() == Color::Black {
             -eval
@@ -83,38 +121,38 @@ pub fn main() {
 
         //let eval = (eval(board) * 100).clamp(-2000, 2000);
 
-		let eval = if eval.abs() <= 100 {
-			[0.0, 1.0, 0.0]
-		} else {
-			if eval.signum() == 1 {
-				[0.0, 0.0, 1.0]
-			} else {
-				[1.0, 0.0, 0.0]
-			}
-		};
+        // let eval = if eval.abs() <= 100 {
+        //     [0.0, 1.0, 0.0]
+        // } else {
+        //     if eval.signum() == 1 {
+        //         [0.0, 0.0, 1.0]
+        //     } else {
+        //         [1.0, 0.0, 0.0]
+        //     }
+        // };
 
         if game > 1000000 {
-			let mut input = vec![0f32; 896];
-			encode(board, &mut input, false);
+            let mut input = vec![0f32; 768];
+            encode(board, &mut input, false);
             test_positions.input.push(input);
 
-			let mut input = vec![0f32; 896];
-			encode(board, &mut input, true);
+            let mut input = vec![0f32; 768];
+            encode(board, &mut input, true);
             test_positions.input.push(input);
 
-            test_positions.labels.push(eval);
-			test_positions.labels.push(eval);
+            test_positions.labels.push(eval as f32 / 2000.0);
+            test_positions.labels.push(eval as f32 / 2000.0);
         } else {
-			let mut input = vec![0f32; 896];
-			encode(board, &mut input, false);
+            let mut input = vec![0f32; 768];
+            encode(board, &mut input, false);
             train_positions.input.push(input);
 
-			let mut input = vec![0f32; 896];
-			encode(board, &mut input, true);
+            let mut input = vec![0f32; 768];
+            encode(board, &mut input, true);
             train_positions.input.push(input);
 
-            train_positions.labels.push(eval);
-			train_positions.labels.push(eval);
+            train_positions.labels.push(eval as f32 / 2000.0);
+            train_positions.labels.push(eval as f32 / 2000.0);
         }
 
         game += 1;
@@ -126,12 +164,12 @@ pub fn main() {
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<896>,)),
-            dev.tensor(lbl),
+            dev.tensor_from_vec(input, (Const::<768>,)),
+            dev.tensor([lbl]),
         )
     };
 
-	println!("Epoch\tTrain Loss\tTest Loss");
+    println!("Epoch\tTrain Loss\tTest Loss");
     for i_epoch in 0..1000 {
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
@@ -139,13 +177,13 @@ pub fn main() {
         for (input, label) in train_positions
             .shuffled(&mut rng)
             .map(preprocess)
-            .batch(Const::<BATCH_SIZE>)
+            .batch_exact(Const::<BATCH_SIZE>)
             .collate()
             .stack()
             .progress()
         {
             let logits = model.forward_mut(input.traced(grads));
-            let loss = cross_entropy_with_logits_loss(logits, label);
+            let loss = mse_loss(logits, label);
 
             total_epoch_loss += loss.array();
             //dbg!(loss.array());
@@ -157,7 +195,7 @@ pub fn main() {
         }
         let dur = Instant::now() - start;
 
-        model.save("conv_model.npz").unwrap();
+        model.save("dense_mlp.npz").unwrap();
 
         // test model
         let mut test_total_epoch_loss = 0.0;
@@ -165,12 +203,12 @@ pub fn main() {
         for (input, label) in test_positions
             .shuffled(&mut rng)
             .map(preprocess)
-            .batch(Const::<BATCH_SIZE>)
+            .batch_exact(Const::<BATCH_SIZE>)
             .collate()
             .stack()
         {
             let logits = model.forward(input);
-            let loss = cross_entropy_with_logits_loss(logits, label);
+            let loss = mse_loss(logits, label);
 
             test_total_epoch_loss += loss.array();
             test_num_batches += 1;
@@ -205,13 +243,20 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
         std::mem::swap(&mut white, &mut black);
     }
 
-    fn to_index(sq: chess::Square, flip: bool) -> usize {
-        if flip {
-			// https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating
-            sq.to_index() ^ 56
+    fn to_index(sq: chess::Square, flip: bool, is_black: bool) -> usize {
+        let horizontal_flip = if flip {
+            // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating
+			// horizontal mirroring
+            sq.to_index() ^ 7
         } else {
             sq.to_index()
-        }
+        };
+
+		if is_black {
+			horizontal_flip ^ 56
+		} else {
+			horizontal_flip
+		}
     }
 
     //////////////////// pawns ////////////////////
@@ -220,7 +265,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip)] = 1.0;
+        out[to_index(sq, flip, is_black)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -229,7 +274,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64] = 1.0;
+        out[to_index(sq, flip, is_black) + 64] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -240,7 +285,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 2] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 2] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -249,7 +294,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 3] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 3] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -260,7 +305,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 4] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 4] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -269,7 +314,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 5] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 5] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -280,7 +325,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 6] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 6] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -289,7 +334,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 7] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 7] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -300,7 +345,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 8] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 8] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -309,7 +354,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 9] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 9] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -320,7 +365,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 10] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 10] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -329,23 +374,23 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip) + 64 * 11] = 1.0;
+        out[to_index(sq, flip, is_black) + 64 * 11] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
 
-    let mut movegen = MoveGen::new_legal(&board);
-    movegen.set_iterator_mask(*black); // calculate attacks
-    for mov in movegen {
-        out[to_index(mov.get_dest(), flip) + 64 * 12] = 1.0;
-    }
+    // let mut movegen = MoveGen::new_legal(&board);
+    // movegen.set_iterator_mask(*black); // calculate attacks
+    // for mov in movegen {
+    //     out[to_index(mov.get_dest(), flip) + 64 * 12] = 1.0;
+    // }
 
-    let board = board.null_move();
-    if let Some(board) = board {
-        let mut movegen = MoveGen::new_legal(&board);
-        movegen.set_iterator_mask(*white); // calculate attacks
-        for mov in movegen {
-            out[to_index(mov.get_dest(), flip) + 64 * 13] = 1.0;
-        }
-    }
+    // let board = board.null_move();
+    // if let Some(board) = board {
+    //     let mut movegen = MoveGen::new_legal(&board);
+    //     movegen.set_iterator_mask(*white); // calculate attacks
+    //     for mov in movegen {
+    //         out[to_index(mov.get_dest(), flip) + 64 * 13] = 1.0;
+    //     }
+    // }
 }
