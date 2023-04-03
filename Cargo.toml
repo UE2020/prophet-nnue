@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 chess = "3.2.0"
 csv = "1.2.1"
-dfdx = { git = "https://github.com/UE2020/dfdx.git", features = ["numpy", "nightly"] }
+dfdx = { git = "https://github.com/UE2020/dfdx.git", features = ["numpy", "nightly", "cuda"] }
 indicatif = "0.17.3"
 rand = "0.8.5"
 vampirc-uci = "0.11.1"

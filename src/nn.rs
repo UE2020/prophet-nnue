@@ -8,7 +8,7 @@ use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{default, str::FromStr, time::Instant, vec};
 
-type Device = dfdx::tensor::Cpu;
+type Device = dfdx::tensor::Cuda;
 
 pub type Model = (
     (Linear<768, 256>, ReLU, DropoutOneIn<5>),
