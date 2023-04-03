@@ -11,9 +11,9 @@ use std::{default, str::FromStr, time::Instant, vec};
 type Device = dfdx::tensor::Cpu;
 
 pub type Model = (
-    (Linear<768, 512>, ReLU, DropoutOneIn<5>),
-    (Linear<512, 256>, ReLU, DropoutOneIn<5>),
-    (Linear<256, 1>, Tanh),
+    (Linear<768, 256>, ReLU, DropoutOneIn<5>),
+    (Linear<128, 64>, ReLU, DropoutOneIn<5>),
+    (Linear<64, 1>, Tanh),
     //(Linear<128, 1>, Tanh)
 );
 
