@@ -31,7 +31,7 @@ use dfdx::{
 type Device = dfdx::tensor::Cpu;
 use rand::prelude::{SeedableRng, StdRng};
 
-fn main() {
+fn train() {
     nn::main();
     return;
     // let dev = Device::default();
@@ -51,7 +51,7 @@ fn main() {
     //nn::main();
 }
 
-fn unused() {
+fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
@@ -182,7 +182,8 @@ fn unused() {
                     result.0,
                 	result.1,
                     result.0
-                );                println!("bestmove {}", result.0);
+                );
+                println!("bestmove {}", result.0);
                 eprintln!("Eval: {}", result.1);
             }
             UciMessage::IsReady => println!("readyok"),

@@ -15,13 +15,13 @@ use dfdx::{
     data::*, losses::mse_loss, nn::modules, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
 };
 
-const MAX_SEARCH_DEPTH: usize = 3;
+const MAX_SEARCH_DEPTH: usize = 2;
 const INF: i32 = 20000;
 
 pub type HashTable = CacheTable<TranspositionTableEntry>;
 
 type Device = dfdx::tensor::Cpu;
-type Model = ((modules::Linear<768, 256, f32, Cpu>, ReLU), (modules::Linear<256, 64, f32, Cpu>, ReLU), (modules::Linear<64, 1, f32, Cpu>, Tanh));
+type Model = ((modules::Linear<768, 64, f32, Cpu>, ReLU, DropoutOneIn<4>), (modules::Linear<64, 64, f32, Cpu>, ReLU, DropoutOneIn<4>), (modules::Linear<64, 1, f32, Cpu>, Tanh));
 
 pub fn iterative_deepening_search(board: Board, dev: &Device, net: &Model) -> (ChessMove, i32) {
     // initialize hash table, size: 256
@@ -125,11 +125,12 @@ pub fn negamax(
 		crate::nn::encode(board, &mut board_tensor, false);
 		let test_tensor = dev.tensor(board_tensor);
 		let logits = net.forward(test_tensor);
-        return (logits.array()[0] * 2000.0) as i32;
+        let eval = (logits.array()[0] * 300.0) as i32 + eval(board);
+        return eval;
     }
 
 	match board.status() {
-		BoardStatus::Checkmate => return -2000,
+		BoardStatus::Checkmate => return -300,
 		BoardStatus::Stalemate => return 0,
 		_ => {}
 	}

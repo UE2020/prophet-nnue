@@ -8,11 +8,12 @@ use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{default, str::FromStr, time::Instant, vec};
 
-type Device = dfdx::tensor::Cuda;
+type Device = dfdx::tensor::Cpu;
 
 pub type Model = (
-    (Linear<768, 256>, ReLU),
-    (Linear<256, 64>, ReLU),
+    (Linear<768, 64>, ReLU, DropoutOneIn<4>), // feature transformer
+    (Linear<64, 64>, ReLU, DropoutOneIn<4>),
+    //(Linear<128, 64>, ReLU, DropoutOneIn<4>),
     (Linear<64, 1>, Tanh),
     //(Linear<128, 1>, Tanh)
 );
@@ -71,7 +72,7 @@ pub fn main() {
     //     .expect("failed to execute child");
 
     for result in rdr.records() {
-        if game > 1010000 {
+        if game > 2010000 {
             break;
         }
         let record = result.unwrap();
@@ -107,9 +108,11 @@ pub fn main() {
             }
         };*/
 
+        let static_eval = eval(board);
+
         let eval = record[1].parse::<i32>();
 		let eval = match eval {
-			Ok(eval) => eval.clamp(-2000, 2000),
+			Ok(eval) => eval.clamp(-300, 300),
 			Err(_) => continue,
 		};
 
@@ -118,6 +121,8 @@ pub fn main() {
         } else {
             eval
         };
+
+        let eval = eval - static_eval;
 
         //let eval = (eval(board) * 100).clamp(-2000, 2000);
 
@@ -131,28 +136,20 @@ pub fn main() {
         //     }
         // };
 
-        if game > 1000000 {
+        if game > 2000000 {
             let mut input = vec![0f32; 768];
             encode(board, &mut input, false);
             test_positions.input.push(input);
 
-            let mut input = vec![0f32; 768];
-            encode(board, &mut input, true);
-            test_positions.input.push(input);
-
-            test_positions.labels.push(eval as f32 / 2000.0);
-            test_positions.labels.push(eval as f32 / 2000.0);
+            test_positions.labels.push(eval as f32 / 300.0);
+            //test_positions.labels.push(eval as f32 / 2000.0);
         } else {
             let mut input = vec![0f32; 768];
             encode(board, &mut input, false);
             train_positions.input.push(input);
 
-            let mut input = vec![0f32; 768];
-            encode(board, &mut input, true);
-            train_positions.input.push(input);
-
-            train_positions.labels.push(eval as f32 / 2000.0);
-            train_positions.labels.push(eval as f32 / 2000.0);
+            train_positions.labels.push(eval as f32 / 300.0);
+            //train_positions.labels.push(eval as f32 / 2000.0);
         }
 
         game += 1;
@@ -253,7 +250,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
         };
 
 		if is_black {
-			horizontal_flip ^ 56
+			horizontal_flip //^ 56
 		} else {
 			horizontal_flip
 		}
