@@ -63,12 +63,12 @@ pub fn main() {
 
     use std::io::{Read, Write};
     use std::process::{Command, Stdio};
-    let mut child = Command::new("/bin/stockfish")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("failed to execute child");
+    // let mut child = Command::new("/bin/stockfish")
+    //     .stdin(Stdio::piped())
+    //     .stdout(Stdio::piped())
+    //     .stderr(Stdio::null())
+    //     .spawn()
+    //     .expect("failed to execute child");
 
     for result in rdr.records() {
         if game > 1010000 {
@@ -76,7 +76,7 @@ pub fn main() {
         }
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
-        let child_stdin = child.stdin.as_mut().unwrap();
+        /*let child_stdin = child.stdin.as_mut().unwrap();
         child_stdin
             .write_all(format!("position fen {}\neval\n", &record[0]).as_bytes())
             .expect("failed to write");
@@ -105,7 +105,7 @@ pub fn main() {
                     }
                 }
             }
-        };
+        };*/
 
         let eval = record[1].parse::<i32>();
 		let eval = match eval {
