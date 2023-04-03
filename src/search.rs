@@ -21,7 +21,7 @@ const INF: i32 = 20000;
 pub type HashTable = CacheTable<TranspositionTableEntry>;
 
 type Device = dfdx::tensor::Cpu;
-type Model = ((modules::Linear<768, 256, f32, Cpu>, ReLU, DropoutOneIn<5>), (modules::Linear<256, 64, f32, Cpu>, ReLU, DropoutOneIn<5>), (modules::Linear<64, 1, f32, Cpu>, Tanh));
+type Model = ((modules::Linear<768, 256, f32, Cpu>, ReLU), (modules::Linear<256, 64, f32, Cpu>, ReLU), (modules::Linear<64, 1, f32, Cpu>, Tanh));
 
 pub fn iterative_deepening_search(board: Board, dev: &Device, net: &Model) -> (ChessMove, i32) {
     // initialize hash table, size: 256
