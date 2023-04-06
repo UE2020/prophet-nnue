@@ -30,7 +30,7 @@ pub type ResidualBlock<const HIDDEN_SIZE: usize> = (
 
 pub type Model<const NUM_LAYERS: usize = 4, const HIDDEN_SIZE: usize = 200> = (
 	(Conv2D<12, HIDDEN_SIZE, 3, 1, 1>, Bias2D<HIDDEN_SIZE>, ReLU),
-	Repeated<ResidualBlock<HIDDEN_SIZE>, NUM_LAYERS>,
+	//Repeated<ResidualBlock<HIDDEN_SIZE>, NUM_LAYERS>,
 	(Conv2D<HIDDEN_SIZE, 2, 3, 1, 1>, Bias2D<2>, Flatten2D, Linear<128, 1>, Tanh)
 );
 
