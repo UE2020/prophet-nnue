@@ -8,14 +8,30 @@ use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
 use std::{default, str::FromStr, time::Instant, vec};
 
+mod selu;
+use selu::*;
+
 type Device = dfdx::tensor::Cpu;
 
-pub type Model = (
-    (Linear<768, 64>, ReLU, DropoutOneIn<4>), // feature transformer
-    (Linear<64, 64>, ReLU, DropoutOneIn<4>),
-    //(Linear<128, 64>, ReLU, DropoutOneIn<4>),
-    (Linear<64, 1>, Tanh),
-    //(Linear<128, 1>, Tanh)
+pub type ResidualBlock<const HIDDEN_SIZE: usize> = (
+    Residual<(
+        (
+            Conv2D<HIDDEN_SIZE, HIDDEN_SIZE, 3, 1, 1>,
+            BatchNorm2D<HIDDEN_SIZE>,
+            GeLU,
+        ),
+        (
+            Conv2D<HIDDEN_SIZE, HIDDEN_SIZE, 3, 1, 1>,
+            BatchNorm2D<HIDDEN_SIZE>,
+        ),
+    )>,
+    GeLU,
+);
+
+pub type Model<const NUM_LAYERS: usize = 4, const HIDDEN_SIZE: usize = 200> = (
+	(Conv2D<12, HIDDEN_SIZE, 3, 1, 1>, Bias2D<HIDDEN_SIZE>, ReLU),
+	Repeated<ResidualBlock<HIDDEN_SIZE>, NUM_LAYERS>,
+	(Conv2D<HIDDEN_SIZE, 2, 3, 1, 1>, Bias2D<2>, Flatten2D, Linear<128, 1>, Tanh)
 );
 
 pub struct Positions {
@@ -37,7 +53,7 @@ pub fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<Model, f32>();
+    let mut model = dev.build_module::<Model<4, 200>, f32>();
     //model.load("conv_model.npz");
     println!(
         "Number of trainable parameters: {:.2}k",
@@ -72,7 +88,7 @@ pub fn main() {
     //     .expect("failed to execute child");
 
     for result in rdr.records() {
-        if game > 2010000 {
+        if game > 1010000 {
             break;
         }
         let record = result.unwrap();
@@ -101,20 +117,20 @@ pub fn main() {
                 loop {
                     let c = output.remove(0);
                     if c == ' ' {
-						let new = output.trim_start();
+                        let new = output.trim_start();
                         break 'outer new.parse::<i32>();
                     }
                 }
             }
         };*/
 
-        let static_eval = eval(board);
+        let static_eval = eval(board) * 100;
 
-        let eval = record[1].parse::<i32>();
-		let eval = match eval {
-			Ok(eval) => eval.clamp(-300, 300),
-			Err(_) => continue,
-		};
+        let eval = if let Ok(eval) = record[1].parse::<i32>() {
+            eval.clamp(-300, 300)
+        } else {
+            continue;
+        };
 
         let eval = if board.side_to_move() == Color::Black {
             -eval
@@ -122,7 +138,11 @@ pub fn main() {
             eval
         };
 
-        let eval = eval - static_eval;
+        // let eval = eval - static_eval;
+
+        // if eval.abs() > 100 {
+        //     continue;
+        // }
 
         //let eval = (eval(board) * 100).clamp(-2000, 2000);
 
@@ -136,7 +156,7 @@ pub fn main() {
         //     }
         // };
 
-        if game > 2000000 {
+        if game > 1000000 {
             let mut input = vec![0f32; 768];
             encode(board, &mut input, false);
             test_positions.input.push(input);
@@ -157,11 +177,11 @@ pub fn main() {
 
     println!("Done!");
 
-    const BATCH_SIZE: usize = 128;
+    const BATCH_SIZE: usize = 64;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<768>,)),
+            dev.tensor_from_vec(input, (Const::<12>, Const::<8>, Const::<8>)),
             dev.tensor([lbl]),
         )
     };
@@ -174,7 +194,7 @@ pub fn main() {
         for (input, label) in train_positions
             .shuffled(&mut rng)
             .map(preprocess)
-            .batch_exact(Const::<BATCH_SIZE>)
+            .batch(Const::<BATCH_SIZE>)
             .collate()
             .stack()
             .progress()
@@ -200,7 +220,7 @@ pub fn main() {
         for (input, label) in test_positions
             .shuffled(&mut rng)
             .map(preprocess)
-            .batch_exact(Const::<BATCH_SIZE>)
+            .batch(Const::<BATCH_SIZE>)
             .collate()
             .stack()
         {
@@ -243,17 +263,17 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     fn to_index(sq: chess::Square, flip: bool, is_black: bool) -> usize {
         let horizontal_flip = if flip {
             // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating
-			// horizontal mirroring
+            // horizontal mirroring
             sq.to_index() ^ 7
         } else {
             sq.to_index()
         };
 
-		if is_black {
-			horizontal_flip //^ 56
-		} else {
-			horizontal_flip
-		}
+        if is_black {
+            horizontal_flip //^ 56
+        } else {
+            horizontal_flip
+        }
     }
 
     //////////////////// pawns ////////////////////
