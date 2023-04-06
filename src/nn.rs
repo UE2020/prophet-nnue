@@ -53,7 +53,7 @@ pub fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<Model<4, 200>, f32>();
+    let mut model = dev.build_module::<Model<4, 6>, f32>();
     //model.load("conv_model.npz");
     println!(
         "Number of trainable parameters: {:.2}k",
@@ -127,7 +127,7 @@ pub fn main() {
         let static_eval = eval(board) * 100;
 
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
-            eval.clamp(-300, 300)
+            eval
         } else {
             continue;
         };
@@ -138,11 +138,11 @@ pub fn main() {
             eval
         };
 
-        // let eval = eval - static_eval;
+        let eval = eval - static_eval;
 
-        // if eval.abs() > 100 {
-        //     continue;
-        // }
+        if eval.abs() > 100 {
+            continue;
+        }
 
         //let eval = (eval(board) * 100).clamp(-2000, 2000);
 
@@ -161,14 +161,14 @@ pub fn main() {
             encode(board, &mut input, false);
             test_positions.input.push(input);
 
-            test_positions.labels.push(eval as f32 / 300.0);
+            test_positions.labels.push(eval as f32 / 100.0);
             //test_positions.labels.push(eval as f32 / 2000.0);
         } else {
             let mut input = vec![0f32; 768];
             encode(board, &mut input, false);
             train_positions.input.push(input);
 
-            train_positions.labels.push(eval as f32 / 300.0);
+            train_positions.labels.push(eval as f32 / 100.0);
             //train_positions.labels.push(eval as f32 / 2000.0);
         }
 
