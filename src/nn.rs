@@ -1,37 +1,28 @@
 use dfdx::{
-    data::*, losses::mse_loss, nn::SaveToNpz, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
+    data::*, losses::mse_loss, nn::SaveToNpz, optim::*, prelude::*, tensor_ops::Backward,
 };
 
 use crate::search::eval;
 use chess::*;
 use indicatif::ProgressIterator;
 use rand::prelude::{SeedableRng, StdRng};
-use std::{default, str::FromStr, time::Instant, vec};
+use std::{str::FromStr, time::Instant, vec};
 
-mod selu;
-use selu::*;
+mod clipped_relu;
+use clipped_relu::*;
 
 type Device = dfdx::tensor::Cpu;
 
-pub type ResidualBlock<const HIDDEN_SIZE: usize> = (
-    Residual<(
-        (
-            Conv2D<HIDDEN_SIZE, HIDDEN_SIZE, 3, 1, 1>,
-            BatchNorm2D<HIDDEN_SIZE>,
-            GeLU,
-        ),
-        (
-            Conv2D<HIDDEN_SIZE, HIDDEN_SIZE, 3, 1, 1>,
-            BatchNorm2D<HIDDEN_SIZE>,
-        ),
-    )>,
-    GeLU,
+pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> = (
+    Linear<768, TRANSFORMED_SIZE>, ClippedReLU
 );
 
-pub type Model<const NUM_LAYERS: usize = 4, const HIDDEN_SIZE: usize = 200> = (
-	(Conv2D<12, HIDDEN_SIZE, 3, 1, 1>, Bias2D<HIDDEN_SIZE>, ReLU),
-	//Repeated<ResidualBlock<HIDDEN_SIZE>, NUM_LAYERS>,
-	(Conv2D<HIDDEN_SIZE, 2, 3, 1, 1>, Bias2D<2>, Flatten2D, Linear<128, 1>, Tanh)
+pub type Model<const L1: usize = 32, const L2: usize = 32> = (
+    // feature transformer
+    FeatureTransformer<256>,
+    (Linear<256, L1>, ClippedReLU),
+    (Linear<L1, L2>, ClippedReLU),
+    (Linear<L2, 1>, Tanh),
 );
 
 pub struct Positions {
@@ -53,7 +44,7 @@ pub fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<Model<4, 6>, f32>();
+    let mut model = dev.build_module::<Model<256, 64>, f32>();
     //model.load("conv_model.npz");
     println!(
         "Number of trainable parameters: {:.2}k",
@@ -61,7 +52,10 @@ pub fn main() {
     );
     let mut grads = model.alloc_grads();
 
-    let mut opt = Adam::new(&model, AdamConfig::default());
+    let mut opt = Adam::new(&model, AdamConfig {
+        weight_decay: Some(WeightDecay::L2(0.0001)),
+        ..Default::default()
+    });
 
     // read csv
     println!("Gathering data...");
@@ -181,7 +175,7 @@ pub fn main() {
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
-            dev.tensor_from_vec(input, (Const::<12>, Const::<8>, Const::<8>)),
+            dev.tensor_from_vec(input, (Const::<768>,)),
             dev.tensor([lbl]),
         )
     };
