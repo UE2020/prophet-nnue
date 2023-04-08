@@ -1,5 +1,10 @@
 {
     "yaml.schemas": {
         "https://gitpod.io/schemas/gitpod-schema.json": "file:///workspace/DeepOrca/.gitpod.yml"
-    }
+	},
+	"rust-analyzer.linkedProjects": [
+		"/Cargo.toml",
+		"/Cargo.toml"
+	],
+	"rust-analyzer.showUnlinkedFileNotification": false
 }

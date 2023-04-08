@@ -2,16 +2,16 @@ use dfdx::{
     data::*, losses::mse_loss, nn::SaveToNpz, optim::*, prelude::*, tensor_ops::Backward,
 };
 
-use crate::search::eval;
 use chess::*;
 use indicatif::ProgressIterator;
+
 use rand::prelude::{SeedableRng, StdRng};
-use std::{str::FromStr, time::Instant, vec};
+use std::str::FromStr;
 
 mod clipped_relu;
-use clipped_relu::*;
+pub use clipped_relu::*;
 
-type Device = dfdx::tensor::Cpu;
+pub type Device = dfdx::tensor::Cpu;
 
 pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> = (
     Linear<768, TRANSFORMED_SIZE>, ClippedReLU
@@ -24,6 +24,8 @@ pub type Model<const L1: usize = 32, const L2: usize = 32> = (
     (Linear<L1, L2>, ClippedReLU),
     (Linear<L2, 1>, Tanh),
 );
+
+pub type BuiltModel = ((modules::Linear<768, 256, f32, Cpu>, ClippedReLU), (modules::Linear<256, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 1, f32, Cpu>, Tanh));
 
 pub struct Positions {
     input: Vec<Vec<f32>>,
@@ -40,12 +42,35 @@ impl ExactSizeDataset for Positions {
     }
 }
 
-pub fn main() {
+/// Calculate material imbalance
+pub fn eval<E: Encodable>(board: &E) -> i32 {
+    let pawns = board.pieces(Piece::Pawn);
+    let knights = board.pieces(Piece::Knight);
+    let bishops = board.pieces(Piece::Bishop);
+    let rooks = board.pieces(Piece::Rook);
+    let queens = board.pieces(Piece::Queen);
+
+    let white = board.color_combined(Color::White);
+    let black = board.color_combined(Color::Black);
+
+    let eval = ((pawns & white).popcnt() as i32 - (pawns & black).popcnt() as i32)
+        + (((knights & white).popcnt() as i32 * 3) - ((knights & black).popcnt() as i32 * 3))
+        + (((bishops & white).popcnt() as i32 * 3) - ((bishops & black).popcnt() as i32 * 3))
+        + (((rooks & white).popcnt() as i32 * 5) - ((rooks & black).popcnt() as i32 * 5))
+        + (((queens & white).popcnt() as i32 * 9) - ((queens & black).popcnt() as i32 * 9));
+    if board.side_to_move() == Color::White {
+        eval
+    } else {
+        -eval
+    }
+}
+
+pub fn train() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<Model<256, 64>, f32>();
-    //model.load("conv_model.npz");
+    let mut model = dev.build_module::<Model<32, 32>, f32>();
+
     println!(
         "Number of trainable parameters: {:.2}k",
         model.num_trainable_params() as f32 / 1000 as f32
@@ -72,56 +97,21 @@ pub fn main() {
         labels: vec![],
     };
 
-    use std::io::{Read, Write};
-    use std::process::{Command, Stdio};
-    // let mut child = Command::new("/bin/stockfish")
-    //     .stdin(Stdio::piped())
-    //     .stdout(Stdio::piped())
-    //     .stderr(Stdio::null())
-    //     .spawn()
-    //     .expect("failed to execute child");
-
     for result in rdr.records() {
-        if game > 1010000 {
+        if game > 2010000 {
             break;
         }
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
-        /*let child_stdin = child.stdin.as_mut().unwrap();
-        child_stdin
-            .write_all(format!("position fen {}\neval\n", &record[0]).as_bytes())
-            .expect("failed to write");
-        drop(child_stdin);
-        let child_stdout = child.stdout.as_mut().unwrap();
-        let eval = 'outer: loop {
-            let mut bytes = vec![];
-            loop {
-                // read a char
-                let mut output = [0];
-                child_stdout
-                    .read_exact(&mut output)
-                    .expect("Failed to read output");
-                if output[0] as char == '\n' {
-                    break;
-                }
-                bytes.push(output[0]);
-            }
-            let mut output = String::from_utf8_lossy(&bytes).to_string();
-            if output.starts_with("Final evaluation") {
-                loop {
-                    let c = output.remove(0);
-                    if c == ' ' {
-                        let new = output.trim_start();
-                        break 'outer new.parse::<i32>();
-                    }
-                }
-            }
-        };*/
 
-        let static_eval = eval(board) * 100;
+        let static_eval = eval(&board) * 100;
+
+		if static_eval != 0 {
+			continue;
+		}
 
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
-            eval
+            eval.clamp(-100, 100)
         } else {
             continue;
         };
@@ -132,38 +122,22 @@ pub fn main() {
             eval
         };
 
-        let eval = eval - static_eval;
+		if eval.abs() >= 100 {
+			continue;
+		}
 
-        if eval.abs() > 100 {
-            continue;
-        }
-
-        //let eval = (eval(board) * 100).clamp(-2000, 2000);
-
-        // let eval = if eval.abs() <= 100 {
-        //     [0.0, 1.0, 0.0]
-        // } else {
-        //     if eval.signum() == 1 {
-        //         [0.0, 0.0, 1.0]
-        //     } else {
-        //         [1.0, 0.0, 0.0]
-        //     }
-        // };
-
-        if game > 1000000 {
+        if game > 2000000 {
             let mut input = vec![0f32; 768];
-            encode(board, &mut input, false);
+            encode(&board, &mut input);
             test_positions.input.push(input);
 
             test_positions.labels.push(eval as f32 / 100.0);
-            //test_positions.labels.push(eval as f32 / 2000.0);
         } else {
             let mut input = vec![0f32; 768];
-            encode(board, &mut input, false);
+            encode(&board, &mut input);
             train_positions.input.push(input);
 
             train_positions.labels.push(eval as f32 / 100.0);
-            //train_positions.labels.push(eval as f32 / 2000.0);
         }
 
         game += 1;
@@ -184,7 +158,6 @@ pub fn main() {
     for i_epoch in 0..1000 {
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
-        let start = Instant::now();
         for (input, label) in train_positions
             .shuffled(&mut rng)
             .map(preprocess)
@@ -197,14 +170,12 @@ pub fn main() {
             let loss = mse_loss(logits, label);
 
             total_epoch_loss += loss.array();
-            //dbg!(loss.array());
             num_batches += 1;
 
             grads = loss.backward();
             opt.update(&mut model, &grads).unwrap();
             model.zero_grads(&mut grads);
         }
-        let dur = Instant::now() - start;
 
         model.save("dense_mlp.npz").unwrap();
 
@@ -235,11 +206,29 @@ pub fn main() {
             break;
         }
     }
-
-    //mlp.save("conv_model.npz").unwrap();
 }
 
-pub fn encode(board: Board, out: &mut [f32], flip: bool) {
+pub trait Encodable {
+	fn pieces(&self, piece: Piece) -> BitBoard;
+	fn color_combined(&self, color: Color) -> BitBoard;
+	fn side_to_move(&self) -> Color;
+}
+
+impl Encodable for Board {
+	fn pieces(&self, piece: Piece) -> BitBoard {
+		*self.pieces(piece)
+	}
+
+	fn color_combined(&self, color: Color) -> BitBoard {
+		*self.color_combined(color)
+	}
+
+	fn side_to_move(&self) -> Color {
+		self.side_to_move()
+	}
+}
+
+pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     let pawns = board.pieces(Piece::Pawn);
     let knights = board.pieces(Piece::Knight);
     let bishops = board.pieces(Piece::Bishop);
@@ -254,19 +243,13 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
         std::mem::swap(&mut white, &mut black);
     }
 
-    fn to_index(sq: chess::Square, flip: bool, is_black: bool) -> usize {
-        let horizontal_flip = if flip {
-            // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating
-            // horizontal mirroring
-            sq.to_index() ^ 7
-        } else {
-            sq.to_index()
-        };
+    fn to_index(sq: chess::Square, is_black: bool) -> usize {
+        let idx = sq.to_index();
 
         if is_black {
-            horizontal_flip //^ 56
+            idx ^ 56
         } else {
-            horizontal_flip
+            idx
         }
     }
 
@@ -276,7 +259,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black)] = 1.0;
+        out[to_index(sq, is_black)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -285,7 +268,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64] = 1.0;
+        out[to_index(sq, is_black) + 64] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -296,7 +279,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 2] = 1.0;
+        out[to_index(sq, is_black) + 64 * 2] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -305,7 +288,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 3] = 1.0;
+        out[to_index(sq, is_black) + 64 * 3] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -316,7 +299,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 4] = 1.0;
+        out[to_index(sq, is_black) + 64 * 4] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -325,7 +308,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 5] = 1.0;
+        out[to_index(sq, is_black) + 64 * 5] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -336,7 +319,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 6] = 1.0;
+        out[to_index(sq, is_black) + 64 * 6] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -345,7 +328,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 7] = 1.0;
+        out[to_index(sq, is_black) + 64 * 7] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -356,7 +339,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 8] = 1.0;
+        out[to_index(sq, is_black) + 64 * 8] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -365,7 +348,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 9] = 1.0;
+        out[to_index(sq, is_black) + 64 * 9] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -376,7 +359,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 10] = 1.0;
+        out[to_index(sq, is_black) + 64 * 10] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -385,7 +368,7 @@ pub fn encode(board: Board, out: &mut [f32], flip: bool) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, flip, is_black) + 64 * 11] = 1.0;
+        out[to_index(sq, is_black) + 64 * 11] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }

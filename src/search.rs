@@ -11,6 +11,8 @@ pub use table::*;
 
 use chess::*;
 
+use crate::nn;
+
 use dfdx::{
     data::*, losses::mse_loss, nn::modules, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
 };
@@ -21,7 +23,7 @@ const INF: i32 = 20000;
 pub type HashTable = CacheTable<TranspositionTableEntry>;
 
 type Device = dfdx::tensor::Cpu;
-type Model = ((modules::Conv2D<12, 6, 3, 1, 1, f32, Cpu>, modules::Bias2D<6, f32, Cpu>, ReLU), (modules::Conv2D<6, 2, 3, 1, 1, f32, Cpu>, modules::Bias2D<2, f32, Cpu>, Flatten2D, modules::Linear<128, 1, f32, Cpu>, Tanh));
+type Model = ((modules::Linear<768, 256, f32, Cpu>, nn::ClippedReLU), (modules::Linear<256, 32, f32, Cpu>, nn::ClippedReLU), (modules::Linear<32, 32, f32, Cpu>, nn::ClippedReLU), (modules::Linear<32, 1, f32, Cpu>, Tanh));
 
 pub fn iterative_deepening_search(board: Board, dev: &Device, net: &Model) -> (ChessMove, i32) {
     // initialize hash table, size: 256
@@ -136,8 +138,8 @@ pub fn negamax(
 
     if depth == 0 {
         let mut board_tensor = vec![0f32; 768];
-        crate::nn::encode(board, &mut board_tensor, false);
-        let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<12>, Const::<8>, Const::<8>));
+        crate::nn::encode(&board, &mut board_tensor);
+        let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
         let logits = net.forward(test_tensor);
         let eval = (logits.array()[0] * 100.0) as i32 + (eval(board) * 100);
         return eval;
