@@ -17,15 +17,12 @@ use dfdx::{
     data::*, losses::mse_loss, nn::modules, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
 };
 
-const MAX_SEARCH_DEPTH: usize = 5;
+const MAX_SEARCH_DEPTH: usize = 7;
 const INF: i32 = 20000;
 
 pub type HashTable = CacheTable<TranspositionTableEntry>;
 
-type Device = dfdx::tensor::Cpu;
-type Model = ((modules::Linear<768, 256, f32, Cpu>, nn::ClippedReLU), (modules::Linear<256, 32, f32, Cpu>, nn::ClippedReLU), (modules::Linear<32, 32, f32, Cpu>, nn::ClippedReLU), (modules::Linear<32, 1, f32, Cpu>, Tanh));
-
-pub fn iterative_deepening_search(board: Board, dev: &Device, net: &Model) -> (ChessMove, i32) {
+pub fn iterative_deepening_search(board: Board, dev: &nn::Device, net: &nn::BuiltModel) -> (ChessMove, i32) {
     // initialize hash table, size: 256
     let mut table = CacheTable::new(256, TranspositionTableEntry::default());
 
@@ -37,6 +34,10 @@ pub fn iterative_deepening_search(board: Board, dev: &Device, net: &Model) -> (C
         let (mov, value) = root_search(&mut table, board, alpha, beta, depth, dev, net);
         curr_mov = Some(mov);
         curr_value = value;
+		println!(
+			"info currmove {} depth {depth} score cp {} pv {}",
+			curr_mov.expect("no move found"), curr_value, curr_mov.expect("no move found")
+		);
         //first_guess = mtdf(&mut table, board, first_guess, depth as u8);
     }
 
@@ -49,8 +50,8 @@ pub fn root_search(
     mut alpha: i32,
     mut beta: i32,
     depth: u8,
-    dev: &Device,
-    net: &Model,
+    dev: &nn::Device,
+    net: &nn::BuiltModel,
 ) -> (ChessMove, i32) {
     let alpha_orig = alpha;
     if let Some(entry) = table.get(board.get_hash()) {
@@ -118,8 +119,8 @@ pub fn negamax(
     mut alpha: i32,
     mut beta: i32,
     depth: u8,
-    dev: &Device,
-    net: &Model,
+    dev: &nn::Device,
+    net: &nn::BuiltModel,
 ) -> i32 {
     let alpha_orig = alpha;
     if let Some(entry) = table.get(board.get_hash()) {
@@ -146,7 +147,7 @@ pub fn negamax(
     }
 
     match board.status() {
-        BoardStatus::Checkmate => return -1900,
+        BoardStatus::Checkmate => return -20000,
         BoardStatus::Stalemate => return 0,
         _ => {}
     }

@@ -14,18 +14,18 @@ pub use clipped_relu::*;
 pub type Device = dfdx::tensor::Cpu;
 
 pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> = (
-    Linear<768, TRANSFORMED_SIZE>, ClippedReLU
+    Linear<768, TRANSFORMED_SIZE>, ClippedReLU, DropoutOneIn<4>,
 );
 
 pub type Model<const TRANSFORMED_SIZE: usize, const L1: usize = 32, const L2: usize = 32> = (
     // feature transformer
     FeatureTransformer<TRANSFORMED_SIZE>,
-    (Linear<TRANSFORMED_SIZE, L1>, ClippedReLU),
-    (Linear<L1, L2>, ClippedReLU),
+    (Linear<TRANSFORMED_SIZE, L1>, ClippedReLU, DropoutOneIn<4>),
+    (Linear<L1, L2>, ClippedReLU, DropoutOneIn<4>),
     (Linear<L2, 1>, Tanh),
 );
 
-pub type BuiltModel = ((modules::Linear<768, 64, f32, Cpu>, ClippedReLU), (modules::Linear<64, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 1, f32, Cpu>, Tanh));
+pub type BuiltModel = ((modules::Linear<768, 256, f32, Cpu>, ClippedReLU, DropoutOneIn<4>), (modules::Linear<256, 32, f32, Cpu>, ClippedReLU, DropoutOneIn<4>), (modules::Linear<32, 32, f32, Cpu>, ClippedReLU, DropoutOneIn<4>), (modules::Linear<32, 1, f32, Cpu>, Tanh));
 
 pub struct Positions {
     input: Vec<Vec<f32>>,
@@ -69,7 +69,7 @@ pub fn train() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<Model<64, 32, 32>, f32>();
+    let mut model = dev.build_module::<Model<256, 32, 32>, f32>();
 
     println!(
         "Number of trainable parameters: {:.2}k",
