@@ -17,15 +17,15 @@ pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> = (
     Linear<768, TRANSFORMED_SIZE>, ClippedReLU
 );
 
-pub type Model<const L1: usize = 32, const L2: usize = 32> = (
+pub type Model<const TRANSFORMED_SIZE: usize, const L1: usize = 32, const L2: usize = 32> = (
     // feature transformer
-    FeatureTransformer<256>,
-    (Linear<256, L1>, ClippedReLU),
+    FeatureTransformer<TRANSFORMED_SIZE>,
+    (Linear<TRANSFORMED_SIZE, L1>, ClippedReLU),
     (Linear<L1, L2>, ClippedReLU),
     (Linear<L2, 1>, Tanh),
 );
 
-pub type BuiltModel = ((modules::Linear<768, 256, f32, Cpu>, ClippedReLU), (modules::Linear<256, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 1, f32, Cpu>, Tanh));
+pub type BuiltModel = ((modules::Linear<768, 64, f32, Cpu>, ClippedReLU), (modules::Linear<64, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 32, f32, Cpu>, ClippedReLU), (modules::Linear<32, 1, f32, Cpu>, Tanh));
 
 pub struct Positions {
     input: Vec<Vec<f32>>,
@@ -69,7 +69,7 @@ pub fn train() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<Model<32, 32>, f32>();
+    let mut model = dev.build_module::<Model<64, 32, 32>, f32>();
 
     println!(
         "Number of trainable parameters: {:.2}k",
@@ -78,7 +78,7 @@ pub fn train() {
     let mut grads = model.alloc_grads();
 
     let mut opt = Adam::new(&model, AdamConfig {
-        weight_decay: Some(WeightDecay::L2(0.0001)),
+        //weight_decay: Some(WeightDecay::L2(0.0001)),
         ..Default::default()
     });
 

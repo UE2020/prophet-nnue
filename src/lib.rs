@@ -64,7 +64,7 @@ pub unsafe extern "C" fn RaiseProphet(net_path: *const c_char) -> *mut Prophet {
 	let path = CStr::from_ptr(net_path);
     let path = path.to_str().unwrap();
 	let dev = nn::Device::default();
-    let mut model = dev.build_module::<nn::Model<32, 32>, f32>();
+    let mut model = dev.build_module::<nn::Model<64, 32, 32>, f32>();
     model.load(path).unwrap();
 	let painter = Box::new(Prophet {
 		dev,
