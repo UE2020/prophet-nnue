@@ -1,5 +1,6 @@
 use std::mem::MaybeUninit;
 use std::ffi::{CStr, CString, c_void};
+use std::os::raw::c_char;
 
 use dfdx::{
     data::*, losses::mse_loss, nn::SaveToNpz, optim::*, prelude::*, tensor_ops::Backward,
@@ -59,7 +60,7 @@ pub struct Prophet {
 
 /// Raise the Prophet. The Prophet shall not be freed.
 #[no_mangle]
-pub unsafe extern "C" fn RaiseProphet(net_path: *const i8) -> *mut Prophet {
+pub unsafe extern "C" fn RaiseProphet(net_path: *const c_char) -> *mut Prophet {
 	let path = CStr::from_ptr(net_path);
     let path = path.to_str().unwrap();
 	let dev = nn::Device::default();

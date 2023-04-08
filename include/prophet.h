@@ -32,7 +32,7 @@ int32_t ProphetSingEvaluation(const struct Prophet *prophet, const struct Prophe
 /**
  * Raise the Prophet. The Prophet shall not be freed.
  */
-struct Prophet *RaiseProphet(const int8_t *net_path);
+struct Prophet *RaiseProphet(const char *net_path);
 
 #ifdef __cplusplus
 } // extern "C"
