@@ -69,7 +69,7 @@ pub fn train() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<Model<256, 32, 32>, f32>();
+    let mut model = dev.build_module::<Model<512, 32, 32>, f32>();
 
     println!(
         "Number of trainable parameters: {:.2}k",
@@ -98,7 +98,7 @@ pub fn train() {
     };
 
     for result in rdr.records() {
-        if game > 2010000 {
+        if game > 110000 {
             break;
         }
         let record = result.unwrap();
@@ -126,7 +126,7 @@ pub fn train() {
 			continue;
 		}
 
-        if game > 2000000 {
+        if game > 100000 {
             let mut input = vec![0f32; 768];
             encode(&board, &mut input);
             test_positions.input.push(input);
@@ -161,7 +161,7 @@ pub fn train() {
         for (input, label) in train_positions
             .shuffled(&mut rng)
             .map(preprocess)
-            .batch(Const::<BATCH_SIZE>)
+            .batch_exact(Const::<BATCH_SIZE>)
             .collate()
             .stack()
             .progress()
@@ -177,7 +177,7 @@ pub fn train() {
             model.zero_grads(&mut grads);
         }
 
-        model.save("dense_mlp.npz").unwrap();
+        model.save("sparse_mlp.npz").unwrap();
 
         // test model
         let mut test_total_epoch_loss = 0.0;
@@ -185,7 +185,7 @@ pub fn train() {
         for (input, label) in test_positions
             .shuffled(&mut rng)
             .map(preprocess)
-            .batch(Const::<BATCH_SIZE>)
+            .batch_exact(Const::<BATCH_SIZE>)
             .collate()
             .stack()
         {
@@ -228,20 +228,42 @@ impl Encodable for Board {
 	}
 }
 
+pub fn pair_to_index(piece: chess::Square, king: chess::Square, offset: usize) -> usize {
+	piece.to_index() + (offset * 64)
+	//piece.to_index() + (64 * king.to_index()) + (offset * 4096)
+}
+
+pub fn vertical_flip(x: BitBoard, is_black: bool) -> BitBoard {
+	if is_black {
+		let mut x = x.0;
+		let k1 = 0x00FF00FF00FF00FF;
+		let k2 = 0x0000FFFF0000FFFF;
+		x = ((x >>  8) & k1) | ((x & k1) <<  8);
+		x = ((x >> 16) & k2) | ((x & k2) << 16);
+		x = ( x >> 32)       | ( x       << 32);
+		BitBoard(x)
+	} else {
+		x
+	}
+}
+
 pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
-    let pawns = board.pieces(Piece::Pawn);
-    let knights = board.pieces(Piece::Knight);
-    let bishops = board.pieces(Piece::Bishop);
-    let rooks = board.pieces(Piece::Rook);
-    let queens = board.pieces(Piece::Queen);
-    let kings = board.pieces(Piece::King);
-    let mut white = board.color_combined(Color::White);
-    let mut black = board.color_combined(Color::Black);
-    let is_black = board.side_to_move() == Color::Black;
+	let is_black = board.side_to_move() == Color::Black;
+    let pawns = vertical_flip(board.pieces(Piece::Pawn), is_black);
+    let knights = vertical_flip(board.pieces(Piece::Knight), is_black);
+    let bishops = vertical_flip(board.pieces(Piece::Bishop), is_black);
+    let rooks = vertical_flip(board.pieces(Piece::Rook), is_black);
+    let queens = vertical_flip(board.pieces(Piece::Queen), is_black);
+    let kings = vertical_flip(board.pieces(Piece::King), is_black);
+    let mut white = vertical_flip(board.color_combined(Color::White), is_black);
+    let mut black = vertical_flip(board.color_combined(Color::Black), is_black);
 
     if is_black {
         std::mem::swap(&mut white, &mut black);
     }
+
+	let white_king = (kings | white).to_square();
+	let black_king = (kings | black).to_square();
 
     fn to_index(sq: chess::Square, is_black: bool) -> usize {
         let idx = sq.to_index();
@@ -259,7 +281,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black)] = 1.0;
+        out[pair_to_index(sq, white_king, 0)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -268,7 +290,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64] = 1.0;
+        out[pair_to_index(sq, black_king, 1)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -279,7 +301,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 2] = 1.0;
+        out[pair_to_index(sq, white_king, 2)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -288,7 +310,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 3] = 1.0;
+        out[pair_to_index(sq, black_king, 3)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -299,7 +321,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 4] = 1.0;
+        out[pair_to_index(sq, white_king, 4)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -308,7 +330,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 5] = 1.0;
+        out[pair_to_index(sq, black_king, 5)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -319,7 +341,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 6] = 1.0;
+        out[pair_to_index(sq, white_king, 6)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -328,7 +350,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 7] = 1.0;
+        out[pair_to_index(sq, black_king, 7)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -339,7 +361,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 8] = 1.0;
+        out[pair_to_index(sq, white_king, 8)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -348,7 +370,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 9] = 1.0;
+        out[pair_to_index(sq, black_king, 9)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -359,7 +381,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 10] = 1.0;
+        out[pair_to_index(sq, white_king, 10)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -368,7 +390,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[to_index(sq, is_black) + 64 * 11] = 1.0;
+        out[pair_to_index(sq, black_king, 11)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }

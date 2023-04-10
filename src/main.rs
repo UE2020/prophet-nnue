@@ -175,8 +175,18 @@ fn main() {
                     best_move.unwrap()
                 );
                 println!("bestmove {}", best_move.unwrap());*/
-                let result = search::iterative_deepening_search(board, &dev, &model);
-                println!("bestmove {}", result.0);
+                // let result = search::iterative_deepening_search(board, &dev, &model);
+                // println!("bestmove {}", result.0);
+
+				let mut board_tensor = vec![0f32; 768];
+				crate::nn::encode(&board, &mut board_tensor);
+				let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
+				let logits = model.forward(test_tensor);
+				let positional_eval = logits.array()[0] * 100.0;
+				let eval = (logits.array()[0] * 100.0) as i32 + (nn::eval(&board) * 100);
+				println!("Positional eval: {:.2}", positional_eval / 100.0);
+				println!("Material eval: {}", nn::eval(&board) as f32);
+				println!("Hybrid eval: {:.2}", eval as f32 / 100.0);
             }
             UciMessage::IsReady => println!("readyok"),
             UciMessage::Quit => break,

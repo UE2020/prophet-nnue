@@ -17,7 +17,7 @@ use dfdx::{
     data::*, losses::mse_loss, nn::modules, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
 };
 
-const MAX_SEARCH_DEPTH: usize = 7;
+const MAX_SEARCH_DEPTH: usize = 5;
 const INF: i32 = 20000;
 
 pub type HashTable = CacheTable<TranspositionTableEntry>;

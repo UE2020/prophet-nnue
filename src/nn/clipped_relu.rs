@@ -15,6 +15,6 @@ impl<S: Shape, E: Dtype, D: Device<E>, T: Tape<E, D>> Module<Tensor<S, E, D, T>>
     type Error = D::Err;
 
     fn try_forward(&self, input: Tensor<S, E, D, T>) -> Result<Self::Output, D::Err> {
-        Ok(input.clamp(E::zero(), E::from_f32(1f32).unwrap()))
+        Ok(input.clamp(E::from_f32(0f32).unwrap(), E::from_f32(1f32).unwrap()))
     }
 }
