@@ -60,11 +60,7 @@ pub fn eval<E: Encodable>(board: &E) -> i32 {
         + (((bishops & white).popcnt() as i32 * 3) - ((bishops & black).popcnt() as i32 * 3))
         + (((rooks & white).popcnt() as i32 * 5) - ((rooks & black).popcnt() as i32 * 5))
         + (((queens & white).popcnt() as i32 * 9) - ((queens & black).popcnt() as i32 * 9));
-    if board.side_to_move() == Color::White {
-        eval
-    } else {
-        -eval
-    }
+    eval
 }
 
 pub fn train() {
@@ -112,7 +108,6 @@ pub fn train() {
         let board = Board::from_str(&record[0]).expect("bad fen");
 
         let static_eval = eval(&board) * 100;
-
         if static_eval != 0 {
             continue;
         }
@@ -121,12 +116,6 @@ pub fn train() {
             eval.clamp(-100, 100)
         } else {
             continue;
-        };
-
-        let eval = if board.side_to_move() == Color::Black {
-            -eval
-        } else {
-            eval
         };
 
         if eval.abs() >= 100 {
@@ -235,7 +224,7 @@ impl Encodable for Board {
     }
 }
 
-pub fn pair_to_index(piece: chess::Square, king: chess::Square, offset: usize) -> usize {
+pub fn pair_to_index(piece: chess::Square, offset: usize) -> usize {
     piece.to_index() + (offset * 64)
     //piece.to_index() + (64 * king.to_index()) + (offset * 4096)
 }
@@ -255,22 +244,14 @@ pub fn vertical_flip(x: BitBoard, is_black: bool) -> BitBoard {
 }
 
 pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
-    let is_black = board.side_to_move() == Color::Black;
-    let pawns = vertical_flip(board.pieces(Piece::Pawn), is_black);
-    let knights = vertical_flip(board.pieces(Piece::Knight), is_black);
-    let bishops = vertical_flip(board.pieces(Piece::Bishop), is_black);
-    let rooks = vertical_flip(board.pieces(Piece::Rook), is_black);
-    let queens = vertical_flip(board.pieces(Piece::Queen), is_black);
-    let kings = vertical_flip(board.pieces(Piece::King), is_black);
-    let mut white = vertical_flip(board.color_combined(Color::White), is_black);
-    let mut black = vertical_flip(board.color_combined(Color::Black), is_black);
-
-    if is_black {
-        std::mem::swap(&mut white, &mut black);
-    }
-
-    let white_king = (kings | white).to_square();
-    let black_king = (kings | black).to_square();
+    let pawns = board.pieces(Piece::Pawn);
+    let knights = board.pieces(Piece::Knight);
+    let bishops = board.pieces(Piece::Bishop);
+    let rooks = board.pieces(Piece::Rook);
+    let queens = board.pieces(Piece::Queen);
+    let kings = board.pieces(Piece::King);
+    let white = board.color_combined(Color::White);
+    let black = board.color_combined(Color::Black);
 
     fn to_index(sq: chess::Square, is_black: bool) -> usize {
         let idx = sq.to_index();
@@ -288,7 +269,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, white_king, 0)] = 1.0;
+        out[pair_to_index(sq, 0)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -297,7 +278,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, black_king, 1)] = 1.0;
+        out[pair_to_index(sq, 1)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -308,7 +289,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, white_king, 2)] = 1.0;
+        out[pair_to_index(sq, 2)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -317,7 +298,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, black_king, 3)] = 1.0;
+        out[pair_to_index(sq, 3)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -328,7 +309,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, white_king, 4)] = 1.0;
+        out[pair_to_index(sq, 4)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -337,7 +318,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, black_king, 5)] = 1.0;
+        out[pair_to_index(sq, 5)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -348,7 +329,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, white_king, 6)] = 1.0;
+        out[pair_to_index(sq, 6)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -357,7 +338,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, black_king, 7)] = 1.0;
+        out[pair_to_index(sq, 7)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -368,7 +349,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, white_king, 8)] = 1.0;
+        out[pair_to_index(sq, 8)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -377,7 +358,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, black_king, 9)] = 1.0;
+        out[pair_to_index(sq, 9)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -388,7 +369,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, white_king, 10)] = 1.0;
+        out[pair_to_index(sq, 10)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -397,7 +378,7 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     while remaining != BitBoard(0) {
         let sq = remaining.to_square();
 
-        out[pair_to_index(sq, black_king, 11)] = 1.0;
+        out[pair_to_index(sq, 11)] = 1.0;
 
         remaining ^= BitBoard::from_square(sq);
     }
@@ -413,9 +394,9 @@ struct Layer {
 impl Layer {
     pub fn new(weights: Vec<f32>, biases: Vec<f32>) -> Self {
         Self {
-            weights: weights.iter().map(|x| (x * 256.0).round() as i16).collect(),
-            biases: biases.iter().map(|x| (x * 256.0).round() as i16).collect(),
-            activations: biases.iter().map(|x| (x * 256.0).round() as i16).collect(),
+            weights: weights.iter().map(|x| (x * SCALE as f32).round() as i16).collect(),
+            biases: biases.iter().map(|x| (x * SCALE as f32).round() as i16).collect(),
+            activations: biases.iter().map(|x| (x * SCALE as f32).round() as i16).collect(),
         }
     }
 }
@@ -451,7 +432,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 0);
+            self.activate(Piece::Pawn, Color::White, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -460,7 +441,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 1);
+            self.activate(Piece::Pawn, Color::Black, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -471,7 +452,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 2);
+            self.activate(Piece::Knight, Color::White, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -480,7 +461,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 3);
+            self.activate(Piece::Knight, Color::Black, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -491,7 +472,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 4);
+            self.activate(Piece::Bishop, Color::White, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -500,7 +481,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 5);
+            self.activate(Piece::Bishop, Color::Black, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -511,7 +492,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 6);
+            self.activate(Piece::Rook, Color::White, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -520,7 +501,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 7);
+            self.activate(Piece::Rook, Color::Black, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -531,7 +512,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 8);
+            self.activate(Piece::Queen, Color::White, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -540,7 +521,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 9);
+            self.activate(Piece::Queen, Color::Black, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -551,7 +532,7 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 10);
+            self.activate(Piece::King, Color::White, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
@@ -560,23 +541,16 @@ impl ProphetNetwork {
         while remaining != BitBoard(0) {
             let sq = remaining.to_square();
 
-            self.activate(sq, 11);
+            self.activate(Piece::King, Color::Black, sq);
 
             remaining ^= BitBoard::from_square(sq);
         }
     }
 
-    // #[inline(always)]
-    // pub fn move_piece(&mut self, piece: Piece, color: Color, from_sq: chess::Square, to_sq: chess::Square) {
-    //     self.deactivate(piece, color, from_sq);
-    //     self.activate(piece, color, to_sq);
-    // }
-
     #[inline(always)]
-    pub fn activate(&mut self, sq: chess::Square, offset: usize) {
+    pub fn activate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
         let feature_idx =
-            pair_to_index(sq, sq, offset) * self.input_layer.activations.len();
-        dbg!(feature_idx);
+        ((piece.to_index()*2 + color.to_index()) * 64 + sq.to_index()) * self.input_layer.activations.len();
         let weights = self.input_layer.weights
             [feature_idx..feature_idx + self.input_layer.activations.len()]
             .iter();
@@ -603,10 +577,7 @@ impl ProphetNetwork {
             .for_each(|(activation, weight)| *activation -= weight);
     }
 
-    pub fn eval(&self) -> f32 {
-        //let bucket = (board.all_pieces().pop_count() as usize - 1) / 4;
-        //let bucket_idx = bucket * self.input_layer.activations.len();
-        //println!("{:?}", &self.hidden_layer.weights.len());
+    pub fn eval(&self) -> i32 {
         let mut output = self.hidden_layer.biases[0] as i32;
 
         let weights = self.hidden_layer.weights.iter();
@@ -619,16 +590,13 @@ impl ProphetNetwork {
             .for_each(|(clipped_activation, weight)| {
                 output += (clipped_activation as i32) * (*weight as i32)
             });
-        (output as f32 / (256.0*256.0)).tanh()
-        //output / (Self::SCALE * Self::SCALE) as i32
+        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 100.0).round() as i32
     }
 
     #[inline(always)]
     fn clipped_relu(x: i16) -> i16 {
-        x.clamp(0, 256)
+        x.clamp(0, SCALE)
     }
 }
 
-impl ProphetNetwork {
-    const SCALE: i16 = 256;
-}
+const SCALE: i16 = 256;
