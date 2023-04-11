@@ -10,6 +10,7 @@ use vampirc_uci::UciPiece;
 use std::str::FromStr;
 
 use std::io::{self, BufRead};
+use std::time::Instant;
 use vampirc_uci::{parse_one, UciMessage};
 
 //mod belief;
@@ -55,10 +56,29 @@ fn main() {
     let dev = Device::default();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let mut model = dev.build_module::<nn::Model<256, 32, 32>, f32>();
-    model.load("dense_mlp.npz").unwrap();
+    let mut model = dev.build_module::<nn::Model<256>, f32>();
+    model.load("sparse_mlp.npz").unwrap();
+    let mut inference = nn::ProphetNetwork::from_built_model(&model);
+
     //nn::main();
-    let mut board = Board::default();
+    let mut board = Board::from_str("r2qk2r/ppp2ppp/2n2n2/2bppb2/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").expect("invalid fen");
+    inference.activate_all(&board);
+    let start = Instant::now();
+    dbg!(inference.eval());
+    dbg!(start.elapsed());
+
+
+    let mut board_tensor = vec![0f32; 768];
+    crate::nn::encode(&board, &mut board_tensor);
+    let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
+    let start = Instant::now();
+    let logits = model.forward(test_tensor);
+    dbg!(start.elapsed());
+    let positional_eval = logits.array()[0] * 100.0;
+    let eval = (logits.array()[0] * 100.0) as i32 + (nn::eval(&board) * 100);
+    println!("Positional eval: {}", positional_eval / 100.0);
+    println!("Material eval: {}", nn::eval(&board) as f32);
+    println!("Hybrid eval: {:.2}", eval as f32 / 100.0);
 
     for line in io::stdin().lock().lines() {
         let msg: UciMessage = parse_one(&line.unwrap());
@@ -175,18 +195,18 @@ fn main() {
                     best_move.unwrap()
                 );
                 println!("bestmove {}", best_move.unwrap());*/
-                // let result = search::iterative_deepening_search(board, &dev, &model);
-                // println!("bestmove {}", result.0);
+                let result = search::iterative_deepening_search(board, &dev, &model);
+                println!("bestmove {}", result.0);
 
-				let mut board_tensor = vec![0f32; 768];
-				crate::nn::encode(&board, &mut board_tensor);
-				let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
-				let logits = model.forward(test_tensor);
-				let positional_eval = logits.array()[0] * 100.0;
-				let eval = (logits.array()[0] * 100.0) as i32 + (nn::eval(&board) * 100);
-				println!("Positional eval: {:.2}", positional_eval / 100.0);
-				println!("Material eval: {}", nn::eval(&board) as f32);
-				println!("Hybrid eval: {:.2}", eval as f32 / 100.0);
+                // let mut board_tensor = vec![0f32; 768];
+                // crate::nn::encode(&board, &mut board_tensor);
+                // let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
+                // let logits = model.forward(test_tensor);
+                // let positional_eval = logits.array()[0] * 100.0;
+                // let eval = (logits.array()[0] * 100.0) as i32 + (nn::eval(&board) * 100);
+                // println!("Positional eval: {:.2}", positional_eval / 100.0);
+                // println!("Material eval: {}", nn::eval(&board) as f32);
+                // println!("Hybrid eval: {:.2}", eval as f32 / 100.0);
             }
             UciMessage::IsReady => println!("readyok"),
             UciMessage::Quit => break,

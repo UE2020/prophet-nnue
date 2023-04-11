@@ -22,7 +22,11 @@ const INF: i32 = 20000;
 
 pub type HashTable = CacheTable<TranspositionTableEntry>;
 
-pub fn iterative_deepening_search(board: Board, dev: &nn::Device, net: &nn::BuiltModel) -> (ChessMove, i32) {
+pub fn iterative_deepening_search(
+    board: Board,
+    dev: &nn::Device,
+    net: &nn::BuiltModel,
+) -> (ChessMove, i32) {
     // initialize hash table, size: 256
     let mut table = CacheTable::new(256, TranspositionTableEntry::default());
 
@@ -34,10 +38,12 @@ pub fn iterative_deepening_search(board: Board, dev: &nn::Device, net: &nn::Buil
         let (mov, value) = root_search(&mut table, board, alpha, beta, depth, dev, net);
         curr_mov = Some(mov);
         curr_value = value;
-		println!(
-			"info currmove {} depth {depth} score cp {} pv {}",
-			curr_mov.expect("no move found"), curr_value, curr_mov.expect("no move found")
-		);
+        println!(
+            "info currmove {} depth {depth} score cp {} pv {}",
+            curr_mov.expect("no move found"),
+            curr_value,
+            curr_mov.expect("no move found")
+        );
         //first_guess = mtdf(&mut table, board, first_guess, depth as u8);
     }
 

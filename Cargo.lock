@@ -87,15 +87,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
-name = "cblas-sys"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6feecd82cce51b0204cf063f0041d69f24ce83f680d87514b004248e7b0fa65"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -286,9 +277,7 @@ name = "dfdx"
 version = "0.11.0"
 source = "git+https://github.com/UE2020/dfdx.git#cc91fa0455b9e5eeaaaa8ede43b7bd46b9bf424b"
 dependencies = [
- "cblas-sys",
  "cudarc",
- "libc",
  "matrixmultiply",
  "num-traits",
  "rand 0.8.5",
