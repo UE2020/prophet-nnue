@@ -68,7 +68,7 @@ pub fn train() {
     let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<Model<256>, f32>();
-
+    //model.load("sparse_mlp.npz").unwrap();
     println!(
         "Number of trainable parameters: {:.2}k",
         model.num_trainable_params() as f32 / 1000 as f32
@@ -78,7 +78,7 @@ pub fn train() {
     let mut opt = Sgd::new(
         &model,
         SgdConfig {
-            lr: 0.001,
+            lr: 0.0001,
             momentum: Some(Momentum::Nesterov(0.9)),
             //weight_decay: Some(WeightDecay::L2(0.0001)),
             ..Default::default()
@@ -244,24 +244,15 @@ pub fn vertical_flip(x: BitBoard, is_black: bool) -> BitBoard {
 }
 
 pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
-    let pawns = board.pieces(Piece::Pawn);
-    let knights = board.pieces(Piece::Knight);
-    let bishops = board.pieces(Piece::Bishop);
-    let rooks = board.pieces(Piece::Rook);
-    let queens = board.pieces(Piece::Queen);
-    let kings = board.pieces(Piece::King);
-    let white = board.color_combined(Color::White);
-    let black = board.color_combined(Color::Black);
-
-    fn to_index(sq: chess::Square, is_black: bool) -> usize {
-        let idx = sq.to_index();
-
-        if is_black {
-            idx ^ 56
-        } else {
-            idx
-        }
-    }
+    let is_black = board.side_to_move() == Color::Black;
+    let pawns = vertical_flip(board.pieces(Piece::Pawn), is_black);
+    let knights = vertical_flip(board.pieces(Piece::Knight), is_black);
+    let bishops = vertical_flip(board.pieces(Piece::Bishop), is_black);
+    let rooks = vertical_flip(board.pieces(Piece::Rook), is_black);
+    let queens = vertical_flip(board.pieces(Piece::Queen), is_black);
+    let kings = vertical_flip(board.pieces(Piece::King), is_black);
+    let white = vertical_flip(board.color_combined(Color::White), is_black);
+    let black = vertical_flip(board.color_combined(Color::Black), is_black);
 
     //////////////////// pawns ////////////////////
 
@@ -394,25 +385,76 @@ struct Layer {
 impl Layer {
     pub fn new(weights: Vec<f32>, biases: Vec<f32>) -> Self {
         Self {
-            weights: weights.iter().map(|x| (x * SCALE as f32).round() as i16).collect(),
-            biases: biases.iter().map(|x| (x * SCALE as f32).round() as i16).collect(),
-            activations: biases.iter().map(|x| (x * SCALE as f32).round() as i16).collect(),
+            weights: weights
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            biases: biases
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            activations: biases
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
         }
     }
 }
 
 #[derive(Clone)]
-pub struct ProphetNetwork {
-    input_layer: Layer,
+pub struct DoubleAccumulatorNNUE {
+    input_weights: Vec<i16>,
+    original_biases: Vec<i16>,
+    // double accumulator architecture
+    white_input_activations: Vec<i16>,
+    black_input_activations: Vec<i16>,
     hidden_layer: Layer,
 }
 
-impl ProphetNetwork {
+impl DoubleAccumulatorNNUE {
     pub fn from_built_model(net: &BuiltModel) -> Self {
         Self {
-            input_layer: Layer::new(net.0 .0.weight.clone().permute().as_vec(), net.0 .0.bias.as_vec()),
+            input_weights: net
+                .0
+                 .0
+                .weight
+                .permute()
+                .as_vec()
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            original_biases: net
+                .0
+                 .0
+                .bias
+                .as_vec()
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            white_input_activations: net
+                .0
+                 .0
+                .bias
+                .as_vec()
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            black_input_activations: net
+                .0
+                 .0
+                .bias
+                .as_vec()
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            // no permutation is needed for 256x1 weight
             hidden_layer: Layer::new(net.1 .0.weight.as_vec(), net.1 .0.bias.as_vec()),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.white_input_activations = self.original_biases.clone();
+        self.black_input_activations = self.original_biases.clone();
     }
 
     pub fn activate_all<E: Encodable>(&mut self, board: &E) {
@@ -424,7 +466,7 @@ impl ProphetNetwork {
         let kings = board.pieces(Piece::King);
 
         let white = board.color_combined(Color::White);
-        let black = board.color_combined(Color::Black);  
+        let black = board.color_combined(Color::Black);
 
         //////////////////// pawns ////////////////////
 
@@ -549,14 +591,25 @@ impl ProphetNetwork {
 
     #[inline(always)]
     pub fn activate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
-        let feature_idx =
-        ((piece.to_index()*2 + color.to_index()) * 64 + sq.to_index()) * self.input_layer.activations.len();
-        let weights = self.input_layer.weights
-            [feature_idx..feature_idx + self.input_layer.activations.len()]
-            .iter();
+        // white accumulator
+        let feature_idx = ((piece.to_index() * 2 + color.to_index()) * 64 + sq.to_index())
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
 
-        self.input_layer
-            .activations
+        self.white_input_activations
+            .iter_mut()
+            .zip(weights)
+            .for_each(|(activation, weight)| *activation += weight);
+
+        // black accumulator
+        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
+            + (sq.to_index() ^ 56))
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
+
+        self.black_input_activations
             .iter_mut()
             .zip(weights)
             .for_each(|(activation, weight)| *activation += weight);
@@ -564,14 +617,25 @@ impl ProphetNetwork {
 
     #[inline(always)]
     pub fn deactivate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
-        let feature_idx =
-        ((piece.to_index()*2 + color.to_index()) * 64 + sq.to_index()) * self.input_layer.activations.len();
-        let weights = self.input_layer.weights
-            [feature_idx..feature_idx + self.input_layer.activations.len()]
-            .iter();
+        // white accumulator
+        let feature_idx = ((piece.to_index() * 2 + color.to_index()) * 64 + sq.to_index())
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
 
-        self.input_layer
-            .activations
+        self.white_input_activations
+            .iter_mut()
+            .zip(weights)
+            .for_each(|(activation, weight)| *activation -= weight);
+
+        // black accumulator
+        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
+            + (sq.to_index() ^ 56))
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
+
+        self.black_input_activations
             .iter_mut()
             .zip(weights)
             .for_each(|(activation, weight)| *activation -= weight);
