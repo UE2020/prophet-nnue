@@ -9,6 +9,6 @@ Compile:
 RUSTFLAGS="-C target-cpu=native" cargo build --release
 ```
 
-For use as a shared library, see `include/prophet.h` and `target/release/libprophet.so".
+For use as a shared library, see `include/prophet.h` and `target/release/libprophet.so". Documentation is included with headers.
 
-For use as a UCI engine, run `./target/release/prophet_nnue`
+For use as a UCI engine, run `./target/release/prophet-nnue`.
