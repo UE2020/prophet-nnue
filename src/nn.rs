@@ -9,7 +9,7 @@ use std::str::FromStr;
 mod clipped_relu;
 pub use clipped_relu::*;
 
-pub type Device = dfdx::tensor::Cpu;
+pub type Device = dfdx::tensor::AutoDevice;
 
 pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> =
     (Linear<768, TRANSFORMED_SIZE>, ClippedReLU, DropoutOneIn<4>);
@@ -63,14 +63,30 @@ pub fn eval<E: Encodable>(board: &E) -> i32 {
     eval
 }
 
-pub fn train() {
+/// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and Nesterov momentum.
+/// Enable the `cuda` feature flag to use a GPU.
+pub fn train(
+    model_name: &str,
+    data: &str,
+    test: usize,
+    train: usize,
+    bootstrap: bool,
+    lr: f32,
+    momentum: f32,
+	epochs: usize,
+) {
     let dev = Device::default();
+    println!("[TRAINER] Using device: {:?}", dev);
     let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<Model<256>, f32>();
-    //model.load("sparse_mlp.npz").unwrap();
-    println!(
-        "Number of trainable parameters: {:.2}k",
+    if bootstrap {
+        model
+            .load(model_name)
+            .expect("model corrupted or not found");
+    }
+    eprintln!(
+        "[TRAINER]: Number of trainable parameters: {:.2}k",
         model.num_trainable_params() as f32 / 1000 as f32
     );
     let mut grads = model.alloc_grads();
@@ -78,16 +94,15 @@ pub fn train() {
     let mut opt = Sgd::new(
         &model,
         SgdConfig {
-            lr: 0.0001,
-            momentum: Some(Momentum::Nesterov(0.9)),
-            //weight_decay: Some(WeightDecay::L2(0.0001)),
+            lr: lr,
+            momentum: Some(Momentum::Nesterov(momentum)),
             ..Default::default()
         },
     );
 
     // read csv
-    println!("Gathering data...");
-    let file = std::fs::File::open("chessData.csv").expect("file not found");
+    eprintln!("[TRAINER] Loading & encoding data...");
+    let file = std::fs::File::open(data).expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
     let mut game = 0;
     let mut train_positions = Positions {
@@ -101,7 +116,7 @@ pub fn train() {
     };
 
     for result in rdr.records() {
-        if game > 2010000 {
+        if game > test + train {
             break;
         }
         let record = result.unwrap();
@@ -122,7 +137,7 @@ pub fn train() {
             continue;
         }
 
-        if game > 2000000 {
+        if game > train {
             let mut input = vec![0f32; 768];
             encode(&board, &mut input);
             test_positions.input.push(input);
@@ -139,9 +154,9 @@ pub fn train() {
         game += 1;
     }
 
-    println!("Done!");
+    eprintln!("[TRAINER] Done! Uploading data...");
 
-    const BATCH_SIZE: usize = 256;
+    const BATCH_SIZE: usize = 64;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
@@ -150,8 +165,7 @@ pub fn train() {
         )
     };
 
-    println!("Epoch\tTrain Loss\tTest Loss");
-    for i_epoch in 0..1000 {
+    for i_epoch in 0..epochs {
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
         for (input, label) in train_positions
@@ -192,8 +206,8 @@ pub fn train() {
             test_num_batches += 1;
         }
 
-        println!(
-            "{i_epoch}\t{:.5}\t{:.5}",
+        eprintln!(
+            "[TRAINER] Epoch {i_epoch}\tLoss: {:.5}\tTest Loss: {:.5}",
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
             BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
         );
@@ -418,6 +432,7 @@ impl DoubleAccumulatorNNUE {
                 .0
                  .0
                 .weight
+                .clone()
                 .permute()
                 .as_vec()
                 .iter()
@@ -455,6 +470,83 @@ impl DoubleAccumulatorNNUE {
     pub fn reset(&mut self) {
         self.white_input_activations = self.original_biases.clone();
         self.black_input_activations = self.original_biases.clone();
+    }
+
+    #[inline(always)]
+    pub fn activate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
+        // white accumulator
+        let feature_idx = ((piece.to_index() * 2 + color.to_index()) * 64 + sq.to_index())
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
+
+        self.white_input_activations
+            .iter_mut()
+            .zip(weights)
+            .for_each(|(activation, weight)| *activation += weight);
+
+        // black accumulator
+        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
+            + (sq.to_index() ^ 56))
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
+
+        self.black_input_activations
+            .iter_mut()
+            .zip(weights)
+            .for_each(|(activation, weight)| *activation += weight);
+    }
+
+    #[inline(always)]
+    pub fn deactivate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
+        // white accumulator
+        let feature_idx = ((piece.to_index() * 2 + color.to_index()) * 64 + sq.to_index())
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
+
+        self.white_input_activations
+            .iter_mut()
+            .zip(weights)
+            .for_each(|(activation, weight)| *activation -= weight);
+
+        // black accumulator
+        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
+            + (sq.to_index() ^ 56))
+            * self.original_biases.len();
+        let weights =
+            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
+
+        self.black_input_activations
+            .iter_mut()
+            .zip(weights)
+            .for_each(|(activation, weight)| *activation -= weight);
+    }
+
+    pub fn eval(&self, side_to_play: Color) -> i32 {
+        let mut output = self.hidden_layer.biases[0] as i32;
+
+        let weights = self.hidden_layer.weights.iter();
+
+        let activations = match side_to_play {
+            Color::White => &self.white_input_activations,
+            Color::Black => &self.black_input_activations,
+        };
+
+        activations
+            .iter()
+            .map(|x| Self::clipped_relu(*x))
+            .zip(weights)
+            .for_each(|(clipped_activation, weight)| {
+                output += (clipped_activation as i32) * (*weight as i32)
+            });
+        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 100.0).round() as i32
+    }
+
+    #[inline(always)]
+    fn clipped_relu(x: i16) -> i16 {
+        x.clamp(0, SCALE)
     }
 
     pub fn activate_all<E: Encodable>(&mut self, board: &E) {
@@ -587,79 +679,6 @@ impl DoubleAccumulatorNNUE {
 
             remaining ^= BitBoard::from_square(sq);
         }
-    }
-
-    #[inline(always)]
-    pub fn activate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
-        // white accumulator
-        let feature_idx = ((piece.to_index() * 2 + color.to_index()) * 64 + sq.to_index())
-            * self.original_biases.len();
-        let weights =
-            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
-
-        self.white_input_activations
-            .iter_mut()
-            .zip(weights)
-            .for_each(|(activation, weight)| *activation += weight);
-
-        // black accumulator
-        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
-            + (sq.to_index() ^ 56))
-            * self.original_biases.len();
-        let weights =
-            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
-
-        self.black_input_activations
-            .iter_mut()
-            .zip(weights)
-            .for_each(|(activation, weight)| *activation += weight);
-    }
-
-    #[inline(always)]
-    pub fn deactivate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
-        // white accumulator
-        let feature_idx = ((piece.to_index() * 2 + color.to_index()) * 64 + sq.to_index())
-            * self.original_biases.len();
-        let weights =
-            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
-
-        self.white_input_activations
-            .iter_mut()
-            .zip(weights)
-            .for_each(|(activation, weight)| *activation -= weight);
-
-        // black accumulator
-        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
-            + (sq.to_index() ^ 56))
-            * self.original_biases.len();
-        let weights =
-            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
-
-        self.black_input_activations
-            .iter_mut()
-            .zip(weights)
-            .for_each(|(activation, weight)| *activation -= weight);
-    }
-
-    pub fn eval(&self) -> i32 {
-        let mut output = self.hidden_layer.biases[0] as i32;
-
-        let weights = self.hidden_layer.weights.iter();
-
-        self.input_layer
-            .activations
-            .iter()
-            .map(|x| Self::clipped_relu(*x))
-            .zip(weights)
-            .for_each(|(clipped_activation, weight)| {
-                output += (clipped_activation as i32) * (*weight as i32)
-            });
-        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 100.0).round() as i32
-    }
-
-    #[inline(always)]
-    fn clipped_relu(x: i16) -> i16 {
-        x.clamp(0, SCALE)
     }
 }
 

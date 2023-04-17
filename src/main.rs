@@ -33,23 +33,8 @@ type Device = dfdx::tensor::Cpu;
 use rand::prelude::{SeedableRng, StdRng};
 
 // fn main() {
-//     nn::train();
+//     nn::train("nnue.npz", "chessData.csv", 10000, 2000000, false, 0.001, 0.9);
 //     return;
-//     // let dev = Device::default();
-//     // let mut rng = StdRng::seed_from_u64(0);
-
-//     // let mut model = dev.build_module::<nn::Model, f32>();
-//     // model.load("dense_mlp.npz").unwrap();
-//     // let mut board_tensor = vec![0.0; 896];
-//     // let board = Board::from_str("4q3/1K1k2P1/3Q3b/3R4/8/8/8/5r1r b - - 0 1").expect("bad fen");
-//     // nn::encode(board, &mut board_tensor, false);
-//     // let logits = model.forward(dev.tensor_from_vec(board_tensor, (Const::<896>,)));
-//     // let logits_array = logits.array();
-
-//     // println!("Side to move: {:?}", board.side_to_move());
-//     // println!("Centipawn eval: {:.2}", logits_array[0] * 2000.0);
-//     // println!("Pawn eval: {:.2}", logits_array[0] * 20.0);
-//     //nn::main();
 // }
 
 fn main() {
@@ -66,7 +51,7 @@ fn main() {
             .expect("invalid fen");
     inference.activate_all(&board);
     let start = Instant::now();
-    dbg!(inference.eval());
+    dbg!(inference.eval(Color::White));
     dbg!(start.elapsed());
 
     let mut board_tensor = vec![0f32; 768];

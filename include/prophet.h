@@ -27,12 +27,48 @@ typedef struct ProphetBoard {
 extern "C" {
 #endif // __cplusplus
 
-int32_t ProphetSingEvaluation(const struct Prophet *prophet, const struct ProphetBoard *board);
+/**
+ * Activate a piece on the accumulators
+ */
+void prophet_activate(struct Prophet *prophet, int32_t piece, int32_t color, int32_t sq);
+
+/**
+ * Activate all the pieces on a board
+ */
+void prophet_activate_all(struct Prophet *prophet, struct ProphetBoard board);
+
+/**
+ * Deactivate a piece on the accumulators
+ */
+void prophet_deactivate(struct Prophet *prophet, int32_t piece, int32_t color, int32_t sq);
+
+/**
+ * Activate all the pieces on a board
+ */
+void prophet_reset(struct Prophet *prophet);
+
+/**
+ * Evaluate a position in full accuracy (no NNUE)
+ */
+int32_t prophet_sing_evaluation(const struct Prophet *prophet, const struct ProphetBoard *board);
+
+/**
+ * Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and Nesterov momentum.
+ * Enable the `cuda` feature flag to use a GPU.
+ */
+void prophet_train(const char *model_name,
+                   const char *data,
+                   size_t test,
+                   size_t train,
+                   bool bootstrap,
+                   float lr,
+                   float momentum,
+                   size_t epochs);
 
 /**
  * Raise the Prophet. The Prophet shall not be freed.
  */
-struct Prophet *RaiseProphet(const char *net_path);
+struct Prophet *raise_prophet(const char *net_path);
 
 #ifdef __cplusplus
 } // extern "C"
