@@ -10,7 +10,6 @@ use vampirc_uci::UciPiece;
 use std::str::FromStr;
 
 use std::io::{self, BufRead};
-use std::time::Instant;
 use vampirc_uci::{parse_one, UciMessage};
 
 //mod belief;
