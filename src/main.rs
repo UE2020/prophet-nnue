@@ -31,7 +31,7 @@ fn main() {
 
     for line in io::stdin().lock().lines() {
 		let line = line.unwrap();
-		if line == "learn\n" {
+		if line == "learn" {
 			nn::train("nnue.npz", "chessData.csv", 10000, 2000000, false, 0.001, 0.9, 50);
 		}
         let msg: UciMessage = parse_one(&line);
