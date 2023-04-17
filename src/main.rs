@@ -17,57 +17,24 @@ use vampirc_uci::{parse_one, UciMessage};
 mod nn;
 mod search;
 
-use dfdx::{
-    data::*,
-    losses::mse_loss,
-    nn::SaveToNpz,
-    optim::{Adam, AdamConfig, Momentum, Optimizer, Sgd, SgdConfig, WeightDecay},
-    prelude::*,
-    tensor::TensorFrom,
-    tensor::TensorFromVec,
-    tensor::{AsArray, DeviceStorage, Trace},
-    tensor_ops::Backward,
-};
+use dfdx::prelude::*;
 
 type Device = dfdx::tensor::Cpu;
-use rand::prelude::{SeedableRng, StdRng};
-
-// fn main() {
-//     nn::train("nnue.npz", "chessData.csv", 10000, 2000000, false, 0.001, 0.9);
-//     return;
-// }
 
 fn main() {
     let dev = Device::default();
-    let mut rng = StdRng::seed_from_u64(0);
 
     let mut model = dev.build_module::<nn::Model<256>, f32>();
-    model.load("sparse_mlp.npz").unwrap();
-    let mut inference = nn::DoubleAccumulatorNNUE::from_built_model(&model);
-
-    //nn::main();
-    let mut board =
-        Board::from_str("r2qk2r/ppp2ppp/2n2n2/2bppb2/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-            .expect("invalid fen");
-    inference.activate_all(&board);
-    let start = Instant::now();
-    dbg!(inference.eval(Color::White));
-    dbg!(start.elapsed());
-
-    let mut board_tensor = vec![0f32; 768];
-    crate::nn::encode(&board, &mut board_tensor);
-    let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
-    let start = Instant::now();
-    let logits = model.forward(test_tensor);
-    dbg!(start.elapsed());
-    let positional_eval = logits.array()[0] * 100.0;
-    let eval = (logits.array()[0] * 100.0) as i32 + (nn::eval(&board) * 100);
-    println!("Positional eval: {}", positional_eval / 100.0);
-    println!("Material eval: {}", nn::eval(&board) as f32);
-    println!("Hybrid eval: {:.2}", eval as f32 / 100.0);
+    model.load("nnue.npz").unwrap();
+    //let mut inference = nn::DoubleAccumulatorNNUE::from_built_model(&model);
+	let mut board = Board::default();
 
     for line in io::stdin().lock().lines() {
-        let msg: UciMessage = parse_one(&line.unwrap());
+		let line = line.unwrap();
+		if line == "learn\n" {
+			nn::train("nnue.npz", "chessData.csv", 10000, 2000000, false, 0.001, 0.9, 50);
+		}
+        let msg: UciMessage = parse_one(&line);
         match msg {
             UciMessage::Uci => {
                 println!("id name DeepOrca");
@@ -153,46 +120,8 @@ fn main() {
                 }
             }
             UciMessage::Go { .. } => {
-                /*let mut best_move = None;
-                let mut best_score = -1000.0;
-                let movegen = MoveGen::new_legal(&board);
-                for mov in movegen {
-                    let mut board_tensor = vec![0f32; 896];
-                    let board = board.make_move_new(mov);
-                    nn::encode(board, &mut board_tensor, false);
-                    let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<896>,));
-                    let logits = model.forward(test_tensor);
-                    if (-logits.array()[0] * 20.0) > best_score {
-                        best_score = -logits.array()[0] * 20.0;
-                        best_move = Some(mov);
-                    }
-                }
-
-                let mut board_tensor = vec![0f32; 896];
-                nn::encode(board, &mut board_tensor, false);
-                let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<896>,));
-                let logits = model.forward(test_tensor);
-                let score = logits.array()[0] * 20.0;
-
-                println!(
-                    "info currmove {}  depth 1 score cp {} pv {}",
-                    best_move.unwrap(),
-                    (score * 100.0) as i32,
-                    best_move.unwrap()
-                );
-                println!("bestmove {}", best_move.unwrap());*/
                 let result = search::iterative_deepening_search(board, &dev, &model);
                 println!("bestmove {}", result.0);
-
-                // let mut board_tensor = vec![0f32; 768];
-                // crate::nn::encode(&board, &mut board_tensor);
-                // let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
-                // let logits = model.forward(test_tensor);
-                // let positional_eval = logits.array()[0] * 100.0;
-                // let eval = (logits.array()[0] * 100.0) as i32 + (nn::eval(&board) * 100);
-                // println!("Positional eval: {:.2}", positional_eval / 100.0);
-                // println!("Material eval: {}", nn::eval(&board) as f32);
-                // println!("Hybrid eval: {:.2}", eval as f32 / 100.0);
             }
             UciMessage::IsReady => println!("readyok"),
             UciMessage::Quit => break,

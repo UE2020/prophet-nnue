@@ -13,9 +13,7 @@ use chess::*;
 
 use crate::nn;
 
-use dfdx::{
-    data::*, losses::mse_loss, nn::modules, optim::*, prelude::*, tensor::*, tensor_ops::Backward,
-};
+use dfdx::prelude::*;
 
 const MAX_SEARCH_DEPTH: usize = 5;
 const INF: i32 = 20000;

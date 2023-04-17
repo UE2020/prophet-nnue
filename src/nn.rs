@@ -187,7 +187,7 @@ pub fn train(
             model.zero_grads(&mut grads);
         }
 
-        model.save("sparse_mlp.npz").unwrap();
+        model.save(model_name).unwrap();
 
         // test model
         let mut test_total_epoch_loss = 0.0;
