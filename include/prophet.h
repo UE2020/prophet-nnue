@@ -77,6 +77,8 @@ void prophet_train(const char *model_name,
 
 /**
  * Raise the Prophet. The Prophet shall not be freed.
+ *
+ * If `net_path` is null, the default net will be used.
  */
 struct Prophet *raise_prophet(const char *net_path);
 
