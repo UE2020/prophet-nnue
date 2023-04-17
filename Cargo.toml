@@ -1,14 +1,19 @@
+cargo-features = ["per-package-target"]
+
 [package]
 name = "prophet-nnue"
 version = "0.1.0"
 edition = "2021"
+default-target = "x86_64-unknown-linux-musl"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
 
 [lib]
 name = "prophet"
 path = "src/lib.rs"
-crate-type = ["staticlib", "cdylib"]
+crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 chess = "3.2.0"
