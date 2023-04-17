@@ -43,6 +43,11 @@ void prophet_activate_all(struct Prophet *prophet, struct ProphetBoard board);
 void prophet_deactivate(struct Prophet *prophet, int32_t piece, int32_t color, int32_t sq);
 
 /**
+ * Let the Prophet die for our sins.
+ */
+void prophet_die_for_sins(struct Prophet *prophet);
+
+/**
  * Evaluate the NNUE residue
  */
 int32_t prophet_get_residue(struct Prophet *prophet, uint8_t side_to_play);

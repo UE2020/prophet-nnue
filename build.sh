@@ -1,1 +1,1 @@
-cbindgen --config cbindgen.toml --crate DeepOrca --output include/prophet.h
+cbindgen --config cbindgen.toml --crate prophet-nnue --output include/prophet.h
