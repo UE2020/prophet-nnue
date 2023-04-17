@@ -25,5 +25,5 @@ Evaluations must be from the white PoV.
 
 ## Features
 
-1. Includes a very basic UCI-compliant α/β chess engine with transposition tables for testing new networks.
-2. Includes a C API for basic training & evaluation.
+- Includes a very basic UCI-compliant α/β chess engine with transposition tables for testing new networks.
+- Includes a C API for basic training & evaluation.
