@@ -144,6 +144,16 @@ pub unsafe extern "C" fn prophet_reset(prophet: &mut Prophet) {
     prophet.nnue.reset();
 }
 
+/// Evaluate the NNUE residue
+#[no_mangle]
+pub unsafe extern "C" fn prophet_get_residue(prophet: &mut Prophet, side_to_play: u8) -> i32 {
+    prophet.nnue.eval(match side_to_play {
+		0 => Color::White,
+		1 => Color::Black,
+		_ => unsafe { std::hint::unreachable_unchecked() },
+	})
+}
+
 /// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and Nesterov momentum.
 /// Enable the `cuda` feature flag to use a GPU.
 #[no_mangle]
