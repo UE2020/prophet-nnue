@@ -72,6 +72,12 @@ pub unsafe extern "C" fn raise_prophet(net_path: *const c_char) -> *mut Prophet 
     Box::into_raw(painter)
 }
 
+/// Let the Prophet die for our sins.
+#[no_mangle]
+pub unsafe extern "C" fn prophet_die_for_sins(prophet: *mut Prophet) {
+	drop(Box::from_raw(prophet));
+}
+
 /// Evaluate a position in full accuracy (no NNUE)
 #[no_mangle]
 pub unsafe extern "C" fn prophet_sing_evaluation(prophet: &Prophet, board: &ProphetBoard) -> i32 {
