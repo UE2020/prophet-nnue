@@ -1,4 +1,5 @@
 use std::ffi::CStr;
+use std::io::Cursor;
 use std::os::raw::c_char;
 
 use dfdx::prelude::*;
@@ -57,13 +58,21 @@ pub struct Prophet {
 }
 
 /// Raise the Prophet. The Prophet shall not be freed.
+/// 
+/// If `net_path` is null, the default net will be used.
 #[no_mangle]
 pub unsafe extern "C" fn raise_prophet(net_path: *const c_char) -> *mut Prophet {
-    let path = CStr::from_ptr(net_path);
-    let path = path.to_str().unwrap();
     let dev = nn::Device::default();
     let mut model = dev.build_module::<nn::Model<256>, f32>();
-    model.load(path).unwrap();
+	if net_path.is_null() {
+		let reader = Cursor::new(include_bytes!("../nnue.npz"));
+		let mut zip = zip::ZipArchive::new(reader).expect("failed to parse archive");
+		model.read(&mut zip).expect("failed to read default model archive");
+	} else {
+		let path = CStr::from_ptr(net_path);
+		let path = path.to_str().unwrap();
+		model.load(path).expect("failed to load model");
+	}
     let painter = Box::new(Prophet {
         dev,
         nnue: nn::DoubleAccumulatorNNUE::from_built_model(&model),
