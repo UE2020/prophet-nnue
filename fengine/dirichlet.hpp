@@ -10,6 +10,7 @@ public:
 
     void set_params(const std::vector<RealType>&);
     std::vector<RealType> get_params();
+
     std::vector<RealType> operator()(RNG&);
 
 private:
