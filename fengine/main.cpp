@@ -295,7 +295,7 @@ int main(int argc, char* argv[]) {
 
     po::options_description desc("Options");
     po::variables_map vm;
-    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight", po::value(&noise_weight)->default_value(1), "Noise weight")("output,o", po::value(&path)->required(), "Output file path");
+    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight", po::value(&noise_weight)->default_value(0.95), "Noise weight")("output,o", po::value(&path)->required(), "Output file path");
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
         po::notify(vm);
