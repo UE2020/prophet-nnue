@@ -12,7 +12,7 @@ pub use clipped_relu::*;
 pub type Device = dfdx::tensor::AutoDevice;
 
 pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> =
-    (Linear<768, TRANSFORMED_SIZE>, ClippedReLU, DropoutOneIn<4>);
+    (Linear<768, TRANSFORMED_SIZE>, ClippedReLU);
 
 pub type Model<const TRANSFORMED_SIZE: usize> = (
     // feature transformer
@@ -24,7 +24,6 @@ pub type BuiltModel = (
     (
         modules::Linear<768, 256, f32, Cpu>,
         ClippedReLU,
-        DropoutOneIn<4>,
     ),
     (modules::Linear<256, 1, f32, Cpu>, Tanh),
 );
@@ -105,10 +104,6 @@ pub fn train(
     let file = std::fs::File::open(data).expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
     let mut game = 0;
-    let mut train_positions = Positions {
-        input: vec![],
-        labels: vec![],
-    };
 
     let mut test_positions = Positions {
         input: vec![],
@@ -116,7 +111,7 @@ pub fn train(
     };
 
     for result in rdr.records() {
-        if game > test + train {
+        if game > test {
             break;
         }
         let record = result.unwrap();
@@ -128,30 +123,25 @@ pub fn train(
             continue;
         };
 
-		if eval.abs() < 150 {
-			continue;
-		}
-
-        if game > train {
-            let mut input = vec![0f32; 768];
-            encode(&board, &mut input);
-            test_positions.input.push(input);
-
-            test_positions.labels.push(eval as f32 / 900.0);
-        } else {
-            let mut input = vec![0f32; 768];
-            encode(&board, &mut input);
-            train_positions.input.push(input);
-
-            train_positions.labels.push(eval as f32 / 900.0);
+        if eval.abs() < 150 {
+            continue;
         }
+
+        let mut input = vec![0f32; 768];
+        encode(&board, &mut input);
+        test_positions.input.push(input);
+
+        test_positions.labels.push(eval as f32 / 900.0);
 
         game += 1;
     }
 
     eprintln!("[TRAINER] Done! Uploading data...");
+    eprintln!();
+    eprintln!();
 
     const BATCH_SIZE: usize = 64;
+    const BATCHES_IN_MEM: usize = BATCH_SIZE * 10000;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
@@ -163,23 +153,74 @@ pub fn train(
     for i_epoch in 0..epochs {
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
-        for (input, label) in train_positions
-            .shuffled(&mut rng)
-            .map(preprocess)
-            .batch_exact(Const::<BATCH_SIZE>)
-            .collate()
-            .stack()
-            .progress()
-        {
-            let logits = model.forward_mut(input.traced(grads));
-            let loss = mse_loss(logits, label);
 
-            total_epoch_loss += loss.array();
-            num_batches += 1;
+        let file = std::fs::File::open(data).expect("file not found");
+        let mut rdr = csv::Reader::from_reader(file);
+        let mut records = rdr.records();
+        loop {
+            let mut last = false;
+            let mut num_training_steps = 0;
+ 
+            let mut train_positions = Positions {
+                input: vec![],
+                labels: vec![],
+            };
 
-            grads = loss.backward();
-            opt.update(&mut model, &grads).unwrap();
-            model.zero_grads(&mut grads);
+            for _ in 0..BATCHES_IN_MEM {
+                let record = records.next();
+                if let Some(record) = record {
+                    let record = record.expect("failed to read record");
+                    let board = Board::from_str(&record[0]).expect("bad fen");
+
+                    let eval = if let Ok(eval) = record[1].parse::<i32>() {
+                        eval.clamp(-900, 900)
+                    } else {
+                        continue;
+                    };
+
+                    if eval.abs() < 150 {
+                        continue;
+                    }
+
+                    let mut input = vec![0f32; 768];
+                    encode(&board, &mut input);
+                    train_positions.input.push(input);
+
+                    train_positions.labels.push(eval as f32 / 900.0);
+                } else {
+                    last = true;
+                    break;
+                }
+            }
+
+            for (input, label) in train_positions
+                .shuffled(&mut rng)
+                .map(preprocess)
+                .batch_exact(Const::<BATCH_SIZE>)
+                .collate()
+                .stack()
+                .progress()
+            {
+                let logits = model.forward_mut(input.traced(grads));
+                let loss = mse_loss(logits, label);
+
+                total_epoch_loss += loss.array();
+                num_batches += 1;
+
+                grads = loss.backward();
+                opt.update(&mut model, &grads).unwrap();
+                model.zero_grads(&mut grads);
+            }
+
+            eprint!("{}{}", up(), erase());
+            eprintln!(
+                "[TRAINER] Running epoch {i_epoch} (training steps={num_batches}): Loss={:.5}",
+                BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
+            );
+
+            if last {
+                break;
+            }
         }
 
         model.save(model_name).unwrap();
@@ -201,17 +242,29 @@ pub fn train(
             test_num_batches += 1;
         }
 
+        eprint!("{}{}", up(), erase());
         eprintln!(
             "[TRAINER] Epoch {i_epoch}\tLoss: {:.5}\tTest Loss: {:.5}",
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
             BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
         );
+        eprintln!();
 
         if (BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32) <= 0.01 {
             break;
         }
     }
 }
+
+fn up() -> String {
+    format!("{}[A", ESC)
+}
+
+fn erase() -> String {
+    format!("{}[2K", ESC)
+}
+
+const ESC: char = 27u8 as char;
 
 pub trait Encodable {
     fn pieces(&self, piece: Piece) -> BitBoard;
@@ -263,9 +316,9 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     let mut white = vertical_flip(board.color_combined(Color::White), is_black);
     let mut black = vertical_flip(board.color_combined(Color::Black), is_black);
 
-	if is_black {
-		std::mem::swap(&mut white, &mut black);
-	}
+    if is_black {
+        std::mem::swap(&mut white, &mut black);
+    }
 
     //////////////////// pawns ////////////////////
 
