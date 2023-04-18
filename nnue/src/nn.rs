@@ -67,11 +67,10 @@ pub fn eval<E: Encodable>(board: &E) -> i32 {
 pub fn train(
     model_name: &str,
     data: &str,
-    test: usize,
-    train: usize,
+    test: &str,
     bootstrap: bool,
     lr: f32,
-    momentum: f32,
+    l2_weight_decay: f32,
     epochs: usize,
 ) {
     let dev = Device::default();
@@ -90,20 +89,19 @@ pub fn train(
     );
     let mut grads = model.alloc_grads();
 
-    let mut opt = Sgd::new(
+    let mut opt = Adam::new(
         &model,
-        SgdConfig {
+        AdamConfig {
             lr: lr,
-            momentum: Some(Momentum::Nesterov(momentum)),
+            weight_decay: Some(WeightDecay::L2(l2_weight_decay)),
             ..Default::default()
         },
     );
 
     // read csv
     eprintln!("[TRAINER] Loading & encoding data...");
-    let file = std::fs::File::open(data).expect("file not found");
+    let file = std::fs::File::open(test).expect("file not found");
     let mut rdr = csv::Reader::from_reader(file);
-    let mut game = 0;
 
     let mut test_positions = Positions {
         input: vec![],
@@ -111,9 +109,6 @@ pub fn train(
     };
 
     for result in rdr.records() {
-        if game > test {
-            break;
-        }
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
 
@@ -132,8 +127,6 @@ pub fn train(
         test_positions.input.push(input);
 
         test_positions.labels.push(eval as f32 / 900.0);
-
-        game += 1;
     }
 
     eprintln!("[TRAINER] Done! Uploading data...");

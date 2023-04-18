@@ -34,11 +34,10 @@ fn main() {
             nn::train(
                 "nnue.npz",
                 "../dataset.csv",
-                10000,
-                2000000,
+				"../testset.csv",
                 false,
-                0.001,
-                0.9,
+                1e-3,
+                1e-6,
                 50,
             );
         }
