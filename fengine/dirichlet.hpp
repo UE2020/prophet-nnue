@@ -41,7 +41,7 @@ std::vector<RealType> DirichletDistribution<RNG, RealType>::get_params() {
 template <typename RNG, typename RealType>
 std::vector<RealType> DirichletDistribution<RNG, RealType>::operator()(RNG& generator) {
     std::vector<RealType> x(alpha.size());
-    RealType sum = 0.0;
+    RealType sum = 0;
     for (size_t i = 0; i < alpha.size(); i++) {
         x[i] = gamma[i](generator);
         sum += x[i];
