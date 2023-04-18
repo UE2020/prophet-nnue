@@ -7,6 +7,7 @@ template <typename RNG, typename RealType = double>
 class DirichletDistribution {
 public:
     DirichletDistribution(const std::vector<RealType>&);
+
     void set_params(const std::vector<RealType>&);
     std::vector<RealType> get_params();
     std::vector<RealType> operator()(RNG&);
