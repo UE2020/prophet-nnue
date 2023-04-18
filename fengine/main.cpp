@@ -338,10 +338,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    size_t fen_count = fens.size();
     std::ostringstream ss;
     ss << "FEN" << std::endl;
-    for (const auto& fen : fens) {
-        ss << fen << std::endl;
+    for (auto it = fens.begin(); it != fens.end(); it = fens.erase(it)) {
+        ss << *it << std::endl;
     }
 
     std::ofstream file(path);
@@ -352,6 +353,6 @@ int main(int argc, char* argv[]) {
     file << ss.str();
     file.close();
 
-    std::cout << "Fengine finished, wrote " << fens.size() << " chess positions." << std::endl;
+    std::cout << "Fengine finished, wrote " << fen_count << " chess positions." << std::endl;
     return 0;
 }
