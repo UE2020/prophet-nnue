@@ -1,4 +1,4 @@
-# ProphetNNUe-datagen
+# ProphetNNUE-datagen
 
 Generate a compatible CSV using the engine of your choice, and a list of fens.
 
