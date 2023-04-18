@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut rdr = csv::Reader::from_reader(file);
 
 	println!("Using engine: {}", opt.engine_path.display());
-	println!("Using fens: {}", opt.fens_path.display());
+	println!("Using FENs: {}", opt.fens_path.display());
 	println!("Using depth: {}", opt.depth);
 	println!("Using output file: {}", opt.output.display());
 	println!("Beginning data generation!");
