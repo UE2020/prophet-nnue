@@ -25,6 +25,6 @@ Evaluations must be from the white PoV.
 
 ## Features
 
-- Includes a very basic UCI-compliant α/β chess engine with transposition tables for testing new networks. ([nnue](/nnue))
+- Includes a very basic UCI-compliant α/β chess engine with transposition tables for testing new networks. ([search](/nnue/src/search.rs))
 - Includes a C API for basic training & evaluation. ([headers](/nnue/include/prophet.h))
-- Includes an evaluation data generator ([here](/datagen))
+- Includes an evaluation data generator. ([here](/datagen))
