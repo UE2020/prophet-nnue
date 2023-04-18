@@ -11,6 +11,6 @@ Using max plies: 60
 Using noise weight: 0.95
 Using output file: nnue/chessData.csv
 
-Played 250000 games (1167.185 games/s)
-Fengine finished, wrote 14635875 chess positions.
+Played 249900 games, produced 14205785 positions (1177.799 games/s, 66953.008 positions/s)
+Fengine finished, wrote 14211383 chess positions.
 ```
