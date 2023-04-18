@@ -288,14 +288,14 @@ void print_help(po::options_description& desc, char* prog_name) {
 }
 
 int main(int argc, char* argv[]) {
-    std::string path;
     int game_count;
     int max_plies;
     double noise_weight;
+    std::string path;
 
     po::options_description desc("Options");
     po::variables_map vm;
-    desc.add_options()("help,h", "Show this help message and exit")("output,o", po::value(&path), "Output file path")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight", po::value(&noise_weight)->default_value(1), "Noise weight");
+    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight", po::value(&noise_weight)->default_value(0.95), "Noise weight")("output,o", po::value(&path)->required(), "Output file path");
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
         po::notify(vm);
@@ -334,18 +334,26 @@ int main(int argc, char* argv[]) {
         descend<WHITE>(pos, mt, fens, max_plies, noise_weight);
         auto current_time = std::chrono::high_resolution_clock::now();
         if ((i % 100) == 0) {
-            std::cout << "\33[2KPlayed " << i << " games (" << ((float) i / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count()) * 1'000'000 << " games/s)\r" << std::flush;
+            std::cout << "\33[2K\rPlayed " << i << " games (" << ((float) i / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count()) * 1'000'000 << " games/s)" << std::flush;
         }
     }
+    std::cout << std::endl;
 
+    size_t fen_count = fens.size();
     std::ostringstream ss;
     ss << "FEN" << std::endl;
-    for (const auto& fen : fens) {
-        ss << fen << std::endl;
+    for (auto it = fens.begin(); it != fens.end(); it = fens.erase(it)) {
+        ss << *it << std::endl;
     }
 
     std::ofstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open " << path << std::endl;
+        return 1;
+    }
     file << ss.str();
     file.close();
+
+    std::cout << "Fengine finished, wrote " << fen_count << " chess positions." << std::endl;
     return 0;
 }
