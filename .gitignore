@@ -1,3 +1,4 @@
 /target
 nnue/chess-evaluations.zip
 nnue/*.csv
+*.csv

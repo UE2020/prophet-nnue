@@ -73,7 +73,7 @@ pub fn train(
     bootstrap: bool,
     lr: f32,
     momentum: f32,
-	epochs: usize,
+    epochs: usize,
 ) {
     let dev = Device::default();
     println!("[TRAINER] Using device: {:?}", dev);

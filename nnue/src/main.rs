@@ -26,13 +26,22 @@ fn main() {
     let mut model = dev.build_module::<nn::Model<256>, f32>();
     model.load("nnue.npz").unwrap();
     //let mut inference = nn::DoubleAccumulatorNNUE::from_built_model(&model);
-	let mut board = Board::default();
+    let mut board = Board::default();
 
     for line in io::stdin().lock().lines() {
-		let line = line.unwrap();
-		if line == "learn" {
-			nn::train("nnue.npz", "chessData.csv", 10000, 2000000, false, 0.001, 0.9, 50);
-		}
+        let line = line.unwrap();
+        if line == "learn" {
+            nn::train(
+                "nnue.npz",
+                "chessData.csv",
+                10000,
+                2000000,
+                false,
+                0.001,
+                0.9,
+                50,
+            );
+        }
         let msg: UciMessage = parse_one(&line);
         match msg {
             UciMessage::Uci => {

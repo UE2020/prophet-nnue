@@ -6,5 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+csv = "1.2.1"
 structopt = { version = "0.3.26", features=["color"] }
+tokio = { version = "1.0.1", features = ["full"] }
 uciengine = "0.1.33"

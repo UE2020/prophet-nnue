@@ -58,21 +58,23 @@ pub struct Prophet {
 }
 
 /// Raise the Prophet. The Prophet shall not be freed.
-/// 
+///
 /// If `net_path` is null, the default net will be used.
 #[no_mangle]
 pub unsafe extern "C" fn raise_prophet(net_path: *const c_char) -> *mut Prophet {
     let dev = nn::Device::default();
     let mut model = dev.build_module::<nn::Model<256>, f32>();
-	if net_path.is_null() {
-		let reader = Cursor::new(include_bytes!("../nnue.npz"));
-		let mut zip = zip::ZipArchive::new(reader).expect("failed to parse archive");
-		model.read(&mut zip).expect("failed to read default model archive");
-	} else {
-		let path = CStr::from_ptr(net_path);
-		let path = path.to_str().unwrap();
-		model.load(path).expect("failed to load model");
-	}
+    if net_path.is_null() {
+        let reader = Cursor::new(include_bytes!("../nnue.npz"));
+        let mut zip = zip::ZipArchive::new(reader).expect("failed to parse archive");
+        model
+            .read(&mut zip)
+            .expect("failed to read default model archive");
+    } else {
+        let path = CStr::from_ptr(net_path);
+        let path = path.to_str().unwrap();
+        model.load(path).expect("failed to load model");
+    }
     let painter = Box::new(Prophet {
         dev,
         nnue: nn::DoubleAccumulatorNNUE::from_built_model(&model),
@@ -84,7 +86,7 @@ pub unsafe extern "C" fn raise_prophet(net_path: *const c_char) -> *mut Prophet 
 /// Let the Prophet die for our sins.
 #[no_mangle]
 pub unsafe extern "C" fn prophet_die_for_sins(prophet: *mut Prophet) {
-	drop(Box::from_raw(prophet));
+    drop(Box::from_raw(prophet));
 }
 
 /// Evaluate a position in full accuracy (no NNUE)
@@ -163,10 +165,10 @@ pub unsafe extern "C" fn prophet_reset(prophet: &mut Prophet) {
 #[no_mangle]
 pub unsafe extern "C" fn prophet_get_residue(prophet: &mut Prophet, side_to_play: u8) -> i32 {
     prophet.nnue.eval(match side_to_play {
-		0 => Color::White,
-		1 => Color::Black,
-		_ => unsafe { std::hint::unreachable_unchecked() },
-	})
+        0 => Color::White,
+        1 => Color::Black,
+        _ => unsafe { std::hint::unreachable_unchecked() },
+    })
 }
 
 /// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and Nesterov momentum.
@@ -180,12 +182,14 @@ pub unsafe extern "C" fn prophet_train(
     bootstrap: bool,
     lr: f32,
     momentum: f32,
-	epochs: usize,
+    epochs: usize,
 ) {
     let model_name = CStr::from_ptr(model_name);
     let model_name = model_name.to_str().unwrap();
 
     let data = CStr::from_ptr(data);
     let data = data.to_str().unwrap();
-    nn::train(model_name, data, test, train, bootstrap, lr, momentum, epochs);
+    nn::train(
+        model_name, data, test, train, bootstrap, lr, momentum, epochs,
+    );
 }
