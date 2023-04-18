@@ -55,11 +55,11 @@ pub fn eval<E: Encodable>(board: &E) -> i32 {
     let white = board.color_combined(Color::White);
     let black = board.color_combined(Color::Black);
 
-    let eval = ((pawns & white).popcnt() as i32 - (pawns & black).popcnt() as i32)
-        + (((knights & white).popcnt() as i32 * 3) - ((knights & black).popcnt() as i32 * 3))
-        + (((bishops & white).popcnt() as i32 * 3) - ((bishops & black).popcnt() as i32 * 3))
-        + (((rooks & white).popcnt() as i32 * 5) - ((rooks & black).popcnt() as i32 * 5))
-        + (((queens & white).popcnt() as i32 * 9) - ((queens & black).popcnt() as i32 * 9));
+    let eval = ((pawns & white).popcnt() as i32 * 100 - (pawns & black).popcnt() as i32 * 100)
+        + (((knights & white).popcnt() as i32 * 300) - ((knights & black).popcnt() as i32 * 300))
+        + (((bishops & white).popcnt() as i32 * 305) - ((bishops & black).popcnt() as i32 * 305))
+        + (((rooks & white).popcnt() as i32 * 500) - ((rooks & black).popcnt() as i32 * 500))
+        + (((queens & white).popcnt() as i32 * 900) - ((queens & black).popcnt() as i32 * 900));
     eval
 }
 
@@ -122,7 +122,7 @@ pub fn train(
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
 
-        let static_eval = eval(&board) * 100;
+        let static_eval = eval(&board);
         if static_eval != 0 {
             continue;
         }
