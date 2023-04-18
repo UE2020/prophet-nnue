@@ -8,7 +8,7 @@ Compile (**REQUIRES NIGHTLY RUSTC**):
 RUSTFLAGS="-C target-cpu=native" cargo build --release
 ```
 
-For use as a shared library, see `include/prophet.h` and `target/release/libprophet.so`. Docs are included with headers.
+For use as a shared library, see `nnue/include/prophet.h` and `target/release/libprophet.so`. Docs are included with headers.
 
 For use as a UCI engine, run `./target/release/prophet-nnue`. The `learn` command can be used to create a new net, as long as chess evals are present at `chessData.csv` in this format:
 ```csv
@@ -25,5 +25,6 @@ Evaluations must be from the white PoV.
 
 ## Features
 
-- Includes a very basic UCI-compliant α/β chess engine with transposition tables for testing new networks.
-- Includes a C API for basic training & evaluation.
+- Includes a very basic UCI-compliant α/β chess engine with transposition tables for testing new networks. ([nnue](/nnue))
+- Includes a C API for basic training & evaluation. ([headers](/nnue/include/prophet.h))
+- Includes an evaluation data generator ([here](/datagen))
