@@ -338,7 +338,7 @@ int main(int argc, char* argv[]) {
         descend<WHITE>(pos, mt, fens, max_plies, noise_weight);
         auto current_time = std::chrono::high_resolution_clock::now();
         if ((i % 100) == 0) {
-            std::cout << "\33[2K\rPlayed " << i << " games, created " << fens.size() << " positions (" << (float) i / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " games/s, " << (float) fens.size() / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " positions/s)" << std::flush;
+            std::cout << "\33[2K\rPlayed " << i << " games, produced " << fens.size() << " positions (" << (float) i / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " games/s, " << (float) fens.size() / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " positions/s)" << std::flush;
         }
     }
     std::cout << std::endl;
