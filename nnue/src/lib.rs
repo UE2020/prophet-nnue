@@ -171,25 +171,28 @@ pub unsafe extern "C" fn prophet_utter_evaluation(prophet: &mut Prophet, side_to
     })
 }
 
-/// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and Nesterov momentum.
+/// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and L2 regularization (weight decay).
 /// Enable the `cuda` feature flag to use a GPU.
 #[no_mangle]
 pub unsafe extern "C" fn prophet_train(
     model_name: *const c_char,
-    data: *const c_char,
-    test: usize,
-    train: usize,
+    dataset: *const c_char,
+	testset: *const c_char,
     bootstrap: bool,
     lr: f32,
-    momentum: f32,
+    l2_weight_decay: f32,
     epochs: usize,
 ) {
     let model_name = CStr::from_ptr(model_name);
     let model_name = model_name.to_str().unwrap();
 
-    let data = CStr::from_ptr(data);
-    let data = data.to_str().unwrap();
+    let dataset = CStr::from_ptr(dataset);
+    let dataset = dataset.to_str().unwrap();
+
+	let testset = CStr::from_ptr(testset);
+    let testset = testset.to_str().unwrap();
+
     nn::train(
-        model_name, data, test, train, bootstrap, lr, momentum, epochs,
+        model_name, dataset, testset, bootstrap, lr, l2_weight_decay, epochs,
     );
 }

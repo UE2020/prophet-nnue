@@ -34,11 +34,10 @@ fn main() {
             nn::train(
                 "nnue.npz",
                 "../dataset.csv",
-                10000,
-                2000000,
+				"../testset.csv",
                 false,
-                0.001,
-                0.9,
+                1e-3,
+                1e-6,
                 50,
             );
         }
@@ -128,12 +127,12 @@ fn main() {
                 }
             }
             UciMessage::Go { .. } => {
-				let mut board_tensor = vec![0f32; 768];
-				crate::nn::encode(&board, &mut board_tensor);
-				let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
-				let logits = model.forward(test_tensor);
-				let eval = logits.array()[0];
-				dbg!(eval);
+                // let mut board_tensor = vec![0f32; 768];
+                // crate::nn::encode(&board, &mut board_tensor);
+                // let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
+                // let logits = model.forward(test_tensor);
+                // let eval = (logits.array()[0] * 900.0) as i32;
+                // dbg!(eval);
                 let result = search::iterative_deepening_search(board, &dev, &model);
                 println!("bestmove {}", result.0);
             }
