@@ -55,7 +55,7 @@ pub fn eval<E: Encodable>(board: &E) -> i32 {
     let white = board.color_combined(Color::White);
     let black = board.color_combined(Color::Black);
 
-    let eval = ((pawns & white).popcnt() as i32 * 100 - (pawns & black).popcnt() as i32 * 100)
+    let eval = (((pawns & white).popcnt() as i32 * 100) - ((pawns & black).popcnt() as i32 * 100))
         + (((knights & white).popcnt() as i32 * 300) - ((knights & black).popcnt() as i32 * 300))
         + (((bishops & white).popcnt() as i32 * 305) - ((bishops & black).popcnt() as i32 * 305))
         + (((rooks & white).popcnt() as i32 * 500) - ((rooks & black).popcnt() as i32 * 500))
