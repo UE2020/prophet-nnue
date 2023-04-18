@@ -122,33 +122,28 @@ pub fn train(
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
 
-        let static_eval = eval(&board);
-        if static_eval != 0 {
-            continue;
-        }
-
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
-            eval.clamp(-100, 100)
+            eval.clamp(-900, 900)
         } else {
             continue;
         };
 
-        if eval.abs() >= 100 {
-            continue;
-        }
+		if eval.abs() < 150 {
+			continue;
+		}
 
         if game > train {
             let mut input = vec![0f32; 768];
             encode(&board, &mut input);
             test_positions.input.push(input);
 
-            test_positions.labels.push(eval as f32 / 100.0);
+            test_positions.labels.push(eval as f32 / 900.0);
         } else {
             let mut input = vec![0f32; 768];
             encode(&board, &mut input);
             train_positions.input.push(input);
 
-            train_positions.labels.push(eval as f32 / 100.0);
+            train_positions.labels.push(eval as f32 / 900.0);
         }
 
         game += 1;
@@ -265,8 +260,12 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     let rooks = vertical_flip(board.pieces(Piece::Rook), is_black);
     let queens = vertical_flip(board.pieces(Piece::Queen), is_black);
     let kings = vertical_flip(board.pieces(Piece::King), is_black);
-    let white = vertical_flip(board.color_combined(Color::White), is_black);
-    let black = vertical_flip(board.color_combined(Color::Black), is_black);
+    let mut white = vertical_flip(board.color_combined(Color::White), is_black);
+    let mut black = vertical_flip(board.color_combined(Color::Black), is_black);
+
+	if is_black {
+		std::mem::swap(&mut white, &mut black);
+	}
 
     //////////////////// pawns ////////////////////
 
@@ -541,7 +540,7 @@ impl DoubleAccumulatorNNUE {
             .for_each(|(clipped_activation, weight)| {
                 output += (clipped_activation as i32) * (*weight as i32)
             });
-        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 100.0).round() as i32
+        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 900.0).round() as i32
     }
 
     #[inline(always)]
