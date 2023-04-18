@@ -282,9 +282,13 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
     pos.undo<Us>(moves[max_probability - probabilities]);
 }
 
-void print_help(po::options_description& desc, char* prog_name) {
-    std::cout << "Usage: " << prog_name << " [options] [port]\n\n"
-              << desc;
+void print_help(po::options_description& desc, char* program_name) {
+    std::cout << "prophet-fengine 0.1.0" << std::endl;
+    std::cout << "ProphetNNUE chess position generator" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Usage: " << program_name << " [OPTIONS]" << std::endl;
+    std::cout << std::endl;
+    std::cout << desc;
 }
 
 int main(int argc, char* argv[]) {
@@ -295,7 +299,7 @@ int main(int argc, char* argv[]) {
 
     po::options_description desc("Options");
     po::variables_map vm;
-    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight", po::value(&noise_weight)->default_value(0.95), "Noise weight")("output,o", po::value(&path)->required(), "Output file path");
+    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight,w", po::value(&noise_weight)->required(), "Noise weight")("output,o", po::value(&path)->required(), "Output file path");
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
         po::notify(vm);
