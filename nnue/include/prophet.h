@@ -48,11 +48,6 @@ void prophet_deactivate(struct Prophet *prophet, int32_t piece, int32_t color, i
 void prophet_die_for_sins(struct Prophet *prophet);
 
 /**
- * Evaluate the NNUE residue
- */
-int32_t prophet_get_residue(struct Prophet *prophet, uint8_t side_to_play);
-
-/**
  * Activate all the pieces on a board
  */
 void prophet_reset(struct Prophet *prophet);
@@ -63,17 +58,21 @@ void prophet_reset(struct Prophet *prophet);
 int32_t prophet_sing_evaluation(const struct Prophet *prophet, const struct ProphetBoard *board);
 
 /**
- * Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and Nesterov momentum.
+ * Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and L2 regularization (weight decay).
  * Enable the `cuda` feature flag to use a GPU.
  */
 void prophet_train(const char *model_name,
-                   const char *data,
-                   size_t test,
-                   size_t train,
+                   const char *dataset,
+                   const char *testset,
                    bool bootstrap,
                    float lr,
-                   float momentum,
+                   float l2_weight_decay,
                    size_t epochs);
+
+/**
+ * Evaluate the NNUE network
+ */
+int32_t prophet_utter_evaluation(struct Prophet *prophet, uint8_t side_to_play);
 
 /**
  * Raise the Prophet. The Prophet shall not be freed.

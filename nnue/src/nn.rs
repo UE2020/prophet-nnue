@@ -12,7 +12,7 @@ pub use clipped_relu::*;
 pub type Device = dfdx::tensor::AutoDevice;
 
 pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> =
-    (Linear<768, TRANSFORMED_SIZE>, ClippedReLU);
+    (Linear<768, TRANSFORMED_SIZE>, ClippedReLU, DropoutOneIn<4>);
 
 pub type Model<const TRANSFORMED_SIZE: usize> = (
     // feature transformer
@@ -24,6 +24,7 @@ pub type BuiltModel = (
     (
         modules::Linear<768, 256, f32, Cpu>,
         ClippedReLU,
+        DropoutOneIn<4>,
     ),
     (modules::Linear<256, 1, f32, Cpu>, Tanh),
 );
