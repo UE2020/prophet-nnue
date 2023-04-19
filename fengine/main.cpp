@@ -358,6 +358,6 @@ int main(int argc, char* argv[]) {
     file << ss.str();
     file.close();
 
-    std::cout << "Fengine finished, wrote " << fen_count << " chess positions." << std::endl;
+    std::cout << "Fengine finished, wrote " << fen_count << " chess positions" << std::endl;
     return 0;
 }
