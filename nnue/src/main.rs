@@ -44,7 +44,7 @@ fn main() {
         let msg: UciMessage = parse_one(&line);
         match msg {
             UciMessage::Uci => {
-                println!("id name DeepOrca");
+                println!("id name ProphetNNUE");
                 println!("uciok")
             }
             UciMessage::Position {
