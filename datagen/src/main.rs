@@ -48,7 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	println!("Using output file: {}", opt.output.display());
 	println!("Beginning data generation!");
 	println!();
-	println!();
 
 	let mut counter = 0usize;
 	let now = Instant::now();
