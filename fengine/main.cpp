@@ -352,6 +352,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Using noise weight: " << noise_weight << std::endl;
     std::cout << "Using q-search: " << std::boolalpha << q_search << std::endl;
     std::cout << "Using output file: " << path << std::endl;
+    std::cout << "Beginning FEN generation!" << std::endl;
     std::cout << std::endl;
 
     initialise_all_databases();
