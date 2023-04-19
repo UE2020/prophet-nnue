@@ -171,6 +171,12 @@ pub unsafe extern "C" fn prophet_utter_evaluation(prophet: &mut Prophet, side_to
     })
 }
 
+/// Print board
+#[no_mangle]
+pub unsafe extern "C" fn prophet_sing_gospel(prophet: &Prophet) {
+    prophet.nnue.print_fen();
+}
+
 /// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and L2 regularization (weight decay).
 /// Enable the `cuda` feature flag to use a GPU.
 #[no_mangle]

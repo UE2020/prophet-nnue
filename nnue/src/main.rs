@@ -25,6 +25,9 @@ fn main() {
 
     let mut model = dev.build_module::<nn::Model<256>, f32>();
     model.load("./nnue/nnue.npz").unwrap();
+
+	let mut nnue = nn::DoubleAccumulatorNNUE::from_built_model(&model);
+
     //let mut inference = nn::DoubleAccumulatorNNUE::from_built_model(&model);
     let mut board = Board::default();
 
@@ -127,12 +130,17 @@ fn main() {
                 }
             }
             UciMessage::Go { .. } => {
-                // let mut board_tensor = vec![0f32; 768];
-                // crate::nn::encode(&board, &mut board_tensor);
-                // let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
-                // let logits = model.forward(test_tensor);
-                // let eval = (logits.array()[0] * 900.0) as i32;
-                // dbg!(eval);
+                let mut board_tensor = vec![0f32; 768];
+                crate::nn::encode(&board, &mut board_tensor);
+                let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
+                let logits = model.forward(test_tensor);
+                let eval = (logits.array()[0] * 900.0) as i32;
+                dbg!(eval);
+
+				nnue.reset();
+				nnue.activate_all(&board);
+				dbg!(nnue.eval(board.side_to_move()));
+
                 let result = search::iterative_deepening_search(board, &dev, &model);
                 println!("bestmove {}", result.0);
             }
