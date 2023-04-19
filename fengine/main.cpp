@@ -350,6 +350,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Using # games: " << game_count << std::endl;
     std::cout << "Using max plies: " << max_plies << std::endl;
     std::cout << "Using noise weight: " << noise_weight << std::endl;
+    std::cout << "Using q-search: " << std::boolalpha << q_search << std::endl;
     std::cout << "Using output file: " << path << std::endl;
     std::cout << std::endl;
 
