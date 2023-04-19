@@ -462,6 +462,9 @@ pub struct DoubleAccumulatorNNUE {
     hidden_layer: Layer,
 
     debug: BoardBuilder,
+
+    black: usize,
+    white: usize,
 }
 
 impl DoubleAccumulatorNNUE {
@@ -504,6 +507,9 @@ impl DoubleAccumulatorNNUE {
             // no permutation is needed for 256x1 weight
             hidden_layer: Layer::new(net.1 .0.weight.clone().permute().as_vec(), net.1 .0.bias.as_vec()),
             debug: BoardBuilder::new(),
+
+            black: 0,
+            white: 0,
         }
     }
 
@@ -538,6 +544,11 @@ impl DoubleAccumulatorNNUE {
             .for_each(|(activation, weight)| *activation += weight);
         
         self.debug.piece(sq, piece, color);
+
+        match color {
+            Color::White => self.white += 1,
+            Color::Black => self.black += 1,
+        }
     }
 
     #[inline(always)]
@@ -566,6 +577,11 @@ impl DoubleAccumulatorNNUE {
             .for_each(|(activation, weight)| *activation -= weight);
     
         self.debug.clear_square(sq);
+
+        match color {
+            Color::White => self.white -= 1,
+            Color::Black => self.black -= 1,
+        }
     }
 
     pub fn eval(&self, side_to_play: Color) -> i32 {
@@ -593,6 +609,8 @@ impl DoubleAccumulatorNNUE {
         self.debug.side_to_move(to_play);
         let board: Board = self.debug.try_into().expect("invalid board!");
         dbg!(board.to_string());
+        dbg!(self.white);
+        dbg!(self.black);
     }
 
     #[inline(always)]
