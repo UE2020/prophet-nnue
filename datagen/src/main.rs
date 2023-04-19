@@ -1,6 +1,6 @@
 use std::time::Instant;
 use std::{path::PathBuf, fs::File};
-use std::io::{prelude::*, BufWriter};
+use std::io::{prelude::*, BufWriter, self};
 
 use structopt::StructOpt;
 use uciengine::{uciengine::*, analysis::*};
@@ -78,27 +78,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}).as_bytes()).expect("failed to write to output file");
 
 		if counter % 100 == 0 {
-			fn up() -> String {
-				format!("{}[A", ESC)
-			}
-			
-			fn erase() -> String {
-				format!("{}[2K", ESC)
-			}
-
-			const ESC: char = 27u8 as char;
-			const BACKSPACE: char = 8u8 as char;
-
 			let speed = counter as f32 / now.elapsed().as_secs_f32();
-			print!("{}{}", up(), erase());
-			println!("Wrote {} evals ({:.3} eval/s)", counter, speed);
+			print!("\x1B[2K\rWrote {} evals ({:.3} eval/s)", counter, speed);
+			io::stdout().flush().ok();
 		}
 
 		counter += 1;
     }
 
 	if counter > 0 {
-		println!("Datagen finished, wrote {} evals", counter);
+		println!("\nDatagen finished, wrote {} evals", counter);
 	}
 
 	Ok(())
