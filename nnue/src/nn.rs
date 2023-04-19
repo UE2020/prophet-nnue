@@ -437,31 +437,38 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
 
 #[derive(Clone)]
 struct Layer {
-    weights: Vec<f32>,
-    biases: Vec<f32>,
-    activations: Vec<f32>, // used for incremental layer
+    weights: Vec<i16>,
+    biases: Vec<i16>,
+    activations: Vec<i16>, // used for incremental layer
 }
 
 impl Layer {
     pub fn new(weights: Vec<f32>, biases: Vec<f32>) -> Self {
         Self {
-            weights: weights,
-            biases: biases.clone(),
-            activations: biases,
+            weights: weights
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            biases: biases
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
+            activations: biases
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
+                .collect(),
         }
     }
 }
 
 #[derive(Clone)]
 pub struct DoubleAccumulatorNNUE {
-    input_weights: Vec<f32>,
-    original_biases: Vec<f32>,
+    input_weights: Vec<i16>,
+    original_biases: Vec<i16>,
     // double accumulator architecture
-    white_input_activations: Vec<f32>,
-    black_input_activations: Vec<f32>,
+    white_input_activations: Vec<i16>,
+    black_input_activations: Vec<i16>,
     hidden_layer: Layer,
-
-    debug: BoardBuilder,
 }
 
 impl DoubleAccumulatorNNUE {
@@ -474,36 +481,35 @@ impl DoubleAccumulatorNNUE {
                 .clone()
                 .permute()
                 .as_vec()
-                .into_iter()
-                //.map(|x| (x * SCALE as f32).round() as i16)
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),
             original_biases: net
                 .0
                  .0
                 .bias
                 .as_vec()
-                .into_iter()
-                //.map(|x| (x * SCALE as f32).round() as i16)
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),
             white_input_activations: net
                 .0
                  .0
                 .bias
                 .as_vec()
-                .into_iter()
-                //.map(|x| (x * SCALE as f32).round() as i16)
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),
             black_input_activations: net
                 .0
                  .0
                 .bias
                 .as_vec()
-                .into_iter()
-                //.map(|x| (x * SCALE as f32).round() as i16)
+                .iter()
+                .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),
             // no permutation is needed for 256x1 weight
-            hidden_layer: Layer::new(net.1 .0.weight.clone().permute().as_vec(), net.1 .0.bias.as_vec()),
-            debug: BoardBuilder::new(),
+            hidden_layer: Layer::new(net.1 .0.weight.as_vec(), net.1 .0.bias.as_vec()),
         }
     }
 
@@ -536,8 +542,6 @@ impl DoubleAccumulatorNNUE {
             .iter_mut()
             .zip(weights)
             .for_each(|(activation, weight)| *activation += weight);
-        
-        self.debug.piece(sq, piece, color);
     }
 
     #[inline(always)]
@@ -564,12 +568,10 @@ impl DoubleAccumulatorNNUE {
             .iter_mut()
             .zip(weights)
             .for_each(|(activation, weight)| *activation -= weight);
-    
-        self.debug.clear_square(sq);
     }
 
     pub fn eval(&self, side_to_play: Color) -> i32 {
-        let mut output = self.hidden_layer.biases[0] as f32;
+        let mut output = self.hidden_layer.biases[0] as i32;
 
         let weights = self.hidden_layer.weights.iter();
 
@@ -583,20 +585,14 @@ impl DoubleAccumulatorNNUE {
             .map(|x| Self::clipped_relu(*x))
             .zip(weights)
             .for_each(|(clipped_activation, weight)| {
-                output += (clipped_activation as f32) * (*weight as f32)
+                output += (clipped_activation as i32) * (*weight as i32)
             });
-        (output.tanh() * 900.0).round() as i32
-        //((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 900.0).round() as i32
-    }
-
-    pub fn print_fen(&self) {
-        let board: Board = self.debug.try_into().expect("invalid board!");
-        dbg!(board.to_string());
+        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 900.0).round() as i32
     }
 
     #[inline(always)]
-    fn clipped_relu(x: f32) -> f32 {
-        x.clamp(0.0, 1.0)
+    fn clipped_relu(x: i16) -> i16 {
+        x.clamp(0, SCALE)
     }
 
     pub fn activate_all<E: Encodable>(&mut self, board: &E) {
@@ -732,4 +728,4 @@ impl DoubleAccumulatorNNUE {
     }
 }
 
-const SCALE: i16 = 512;
+const SCALE: i16 = 256;

@@ -59,10 +59,6 @@ int32_t prophet_sing_evaluation(const struct Prophet *prophet, const struct Prop
 
 /**
  * Print board
- */
-void prophet_sing_gospel(const struct Prophet *prophet);
-
-/**
  * Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and L2 regularization (weight decay).
  * Enable the `cuda` feature flag to use a GPU.
  */

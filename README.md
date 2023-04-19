@@ -28,3 +28,4 @@ Evaluations must be from the side-to-play PoV.
 - Includes a very basic UCI-compliant α/β chess engine with transposition tables for testing new networks. ([search](/nnue/src/search.rs))
 - Includes a C API for basic training & evaluation. ([headers](/nnue/include/prophet.h))
 - Includes an evaluation data generator. ([here](/datagen))
+- Includes a chess position generator, compatible with the evaluation data generator. ([here](/fengine))

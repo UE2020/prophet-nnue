@@ -14,8 +14,12 @@ struct Opt {
     output: PathBuf,
 
     /// Set depth
-    #[structopt(short, long, default_value = "6")]
-    depth: u8,
+    #[structopt(short, long)]
+    depth: Option<u8>,
+
+	/// Set nodes
+	#[structopt(short, long)]
+	nodes: Option<u8>,
 
     /// Engine path
     #[structopt(short, long, parse(from_os_str))]
@@ -39,7 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("Using engine: {}", opt.engine_path.display());
 	println!("Using FENs: {}", opt.fens_path.display());
-	println!("Using depth: {}", opt.depth);
+	println!("Using depth: {:?}", opt.depth);
+	println!("Using nodes: {:?}", opt.nodes);
 	println!("Using output file: {}", opt.output.display());
 	println!("Beginning data generation!");
 	println!();
@@ -53,10 +58,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 			continue;
 		}
 
-		let job = GoJob::new()
+		let mut job = GoJob::new()
         	.uci_opt("UCI_Variant", "chess")
-        	.pos_fen(&record[0])
-        	.go_opt("depth", opt.depth);
+        	.pos_fen(&record[0]);
+
+		if let Some(depth) = opt.depth {
+			job = job.go_opt("depth", depth);
+		} else if let Some(nodes) = opt.nodes {
+			job = job.go_opt("nodes", nodes);
+		} else {
+			eprintln!("Error: no depth or nodes specified.");
+			break;
+		}
 
 		let result = engine.go(job).await.expect("engine failure");
 		new_data.write_all(format!("{},{}\n", &record[0], match result.ai.score {
@@ -84,7 +97,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		counter += 1;
     }
 
-	println!("Datagen finished, wrote {} evals", counter);
+	if counter > 0 {
+		println!("Datagen finished, wrote {} evals", counter);
+	}
 
 	Ok(())
 }
