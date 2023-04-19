@@ -96,7 +96,7 @@ pub unsafe extern "C" fn prophet_sing_evaluation(prophet: &Prophet, board: &Prop
     nn::encode(board, &mut board_tensor);
     let test_tensor = prophet.dev.tensor_from_vec(board_tensor, (Const::<768>,));
     let logits = prophet.net.forward(test_tensor);
-    let eval = (logits.array()[0] * 100.0) as i32 + (nn::eval(board) * 100);
+    let eval = (logits.array()[0] * 1500.0) as i32;
     eval
 }
 
