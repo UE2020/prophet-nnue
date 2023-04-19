@@ -232,7 +232,7 @@ int evaluate(const Position& pos) {
 }
 
 template <Color Us, typename RNG>
-void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fens, int max_plies = 60, double noise_weight = 1) {
+void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fens, double noise_weight, int max_plies = 60, bool q_search = false) {
     if (pos.game_ply > max_plies) {
         return;
     }
@@ -245,8 +245,21 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
         return;
     } else if (move_count == 1) {
         pos.play<Us>(moves[0]);
-        fens.insert(pos.fen());
-        descend<~Us>(pos, generator, fens, max_plies, noise_weight);
+        if (q_search) {
+            MoveList<~Us> moves(pos);
+            size_t capturing_moves = 0;
+            for (const auto& move : moves) {
+                if (move.is_capture()) {
+                    capturing_moves++;
+                }
+            }
+            if (!capturing_moves) {
+                fens.insert(pos.fen());
+            }
+        } else {
+            fens.insert(pos.fen());
+        }
+        descend<~Us>(pos, generator, fens, noise_weight, max_plies, q_search);
         pos.undo<Us>(moves[0]);
         return;
     }
@@ -277,8 +290,21 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
 
     double* max_probability = std::max_element(probabilities, probabilities + move_count);
     pos.play<Us>(moves[max_probability - probabilities]);
-    fens.insert(pos.fen());
-    descend<~Us>(pos, generator, fens, max_plies, noise_weight);
+    if (q_search) {
+        MoveList<~Us> moves(pos);
+        size_t capturing_moves = 0;
+        for (const auto& move : moves) {
+            if (move.is_capture()) {
+                capturing_moves++;
+            }
+        }
+        if (!capturing_moves) {
+            fens.insert(pos.fen());
+        }
+    } else {
+        fens.insert(pos.fen());
+    }
+    descend<~Us>(pos, generator, fens, noise_weight, max_plies, q_search);
     pos.undo<Us>(moves[max_probability - probabilities]);
 }
 
@@ -295,11 +321,12 @@ int main(int argc, char* argv[]) {
     int game_count;
     int max_plies;
     double noise_weight;
+    bool q_search;
     std::string path;
 
     po::options_description desc("Options");
     po::variables_map vm;
-    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight,w", po::value(&noise_weight)->required(), "Noise weight")("output,o", po::value(&path)->required(), "Output file path");
+    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight,w", po::value(&noise_weight)->required(), "Noise weight")("q-search,q", "Only output quiescent positions")("output,o", po::value(&path)->required(), "Output file path");
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
         po::notify(vm);
@@ -308,6 +335,8 @@ int main(int argc, char* argv[]) {
             print_help(desc, argv[0]);
             return 0;
         }
+
+        q_search = vm.count("q-search");
     } catch (std::exception& e) {
         if (vm.count("help")) {
             print_help(desc, argv[0]);
@@ -327,7 +356,7 @@ int main(int argc, char* argv[]) {
     initialise_all_databases();
     zobrist::initialise_zobrist_keys();
 
-    std::unordered_set<std::string> fens;
+    std::unordered_set<std::string> fens = {DEFAULT_FEN};
     Position pos(DEFAULT_FEN);
     std::random_device rd;
     std::mt19937 mt(rd());
@@ -335,7 +364,7 @@ int main(int argc, char* argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << std::fixed << std::setprecision(3);
     for (int i = 0; i < game_count; i++) {
-        descend<WHITE>(pos, mt, fens, max_plies, noise_weight);
+        descend<WHITE>(pos, mt, fens, noise_weight, max_plies, q_search);
         auto current_time = std::chrono::high_resolution_clock::now();
         if ((i % 100) == 0) {
             std::cout << "\33[2K\rPlayed " << i << " games, produced " << fens.size() << " positions (" << (float) i / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " games/s, " << (float) fens.size() / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " positions/s)" << std::flush;
