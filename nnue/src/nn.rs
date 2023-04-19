@@ -589,7 +589,8 @@ impl DoubleAccumulatorNNUE {
         //((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 900.0).round() as i32
     }
 
-    pub fn print_fen(&self) {
+    pub fn print_fen(&mut self, to_play: Color) {
+        self.debug.side_to_move(to_play);
         let board: Board = self.debug.try_into().expect("invalid board!");
         dbg!(board.to_string());
     }
