@@ -24,7 +24,7 @@ fn main() {
     let dev = Device::default();
 
     let mut model = dev.build_module::<nn::Model<256>, f32>();
-    model.load("nnue.npz").unwrap();
+    model.load("./nnue/nnue.npz").unwrap();
     //let mut inference = nn::DoubleAccumulatorNNUE::from_built_model(&model);
     let mut board = Board::default();
 
@@ -32,12 +32,12 @@ fn main() {
         let line = line.unwrap();
         if line == "learn" {
             nn::train(
-                "nnue.npz",
-                "../dataset.csv",
-				"../testset.csv",
+                "./nnue/nnue.npz",
+                "dataset2.csv",
+				"testset.csv",
                 false,
                 1e-3,
-                1e-6,
+                0.0,
                 50,
             );
         }
