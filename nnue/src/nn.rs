@@ -118,20 +118,16 @@ pub fn train(
         let board = Board::from_str(&record[0]).expect("bad fen");
 
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
-            eval.clamp(-900, 900)
+            eval.clamp(-1500, 1500)
         } else {
             continue;
         };
-
-        if eval.abs() < 150 {
-            continue;
-        }
 
         let mut input = vec![0f32; 768];
         encode(&board, &mut input);
         test_positions.input.push(input);
 
-        test_positions.labels.push(eval as f32 / 900.0);
+        test_positions.labels.push(eval as f32 / 1500.0);
     }
 
     eprintln!("[TRAINER] Done! Uploading data...");
@@ -171,20 +167,16 @@ pub fn train(
                     let board = Board::from_str(&record[0]).expect("bad fen");
 
                     let eval = if let Ok(eval) = record[1].parse::<i32>() {
-                        eval.clamp(-900, 900)
+                        eval.clamp(-1500, 1500)
                     } else {
                         continue;
                     };
-
-                    if eval.abs() < 150 {
-                        continue;
-                    }
 
                     let mut input = vec![0f32; 768];
                     encode(&board, &mut input);
                     train_positions.input.push(input);
 
-                    train_positions.labels.push(eval as f32 / 900.0);
+                    train_positions.labels.push(eval as f32 / 1500.0);
                 } else {
                     last = true;
                     break;
