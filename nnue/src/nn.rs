@@ -583,7 +583,7 @@ impl DoubleAccumulatorNNUE {
             .for_each(|(clipped_activation, weight)| {
                 output += (clipped_activation as i32) * (*weight as i32)
             });
-        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 900.0).round() as i32
+        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 1500.0).round() as i32
     }
 
     #[inline(always)]
