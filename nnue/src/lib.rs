@@ -172,14 +172,14 @@ pub unsafe extern "C" fn prophet_utter_evaluation(prophet: &mut Prophet, side_to
 }
 
 /// Print board
-#[no_mangle]
-pub unsafe extern "C" fn prophet_sing_gospel(prophet: &mut Prophet, color: u8) {
-    prophet.nnue.print_fen(match color {
-        0 => Color::White,
-        1 => Color::Black,
-        _ => unsafe { std::hint::unreachable_unchecked() },
-    });
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn prophet_sing_gospel(prophet: &mut Prophet, color: u8) {
+//     prophet.nnue.print_fen(match color {
+//         0 => Color::White,
+//         1 => Color::Black,
+//         _ => unsafe { std::hint::unreachable_unchecked() },
+//     });
+// }
 
 /// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and L2 regularization (weight decay).
 /// Enable the `cuda` feature flag to use a GPU.
