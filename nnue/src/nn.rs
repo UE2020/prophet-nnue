@@ -94,7 +94,11 @@ pub fn train(
         &model,
         AdamConfig {
             lr: lr,
-            weight_decay: Some(WeightDecay::L2(l2_weight_decay)),
+            weight_decay: if l2_weight_decay > 0.0 {
+                Some(WeightDecay::L2(l2_weight_decay))
+            } else {
+                None
+            },
             ..Default::default()
         },
     );
@@ -154,7 +158,7 @@ pub fn train(
         loop {
             let mut last = false;
             let mut num_training_steps = 0;
- 
+
             let mut train_positions = Positions {
                 input: vec![],
                 labels: vec![],
@@ -728,4 +732,4 @@ impl DoubleAccumulatorNNUE {
     }
 }
 
-const SCALE: i16 = 256;
+const SCALE: i16 = 1024;

@@ -14,7 +14,7 @@ pub type HashTable = CacheTable<TranspositionTableEntry>;
 pub fn iterative_deepening_search(
     board: Board,
     dev: &nn::Device,
-    net: &nn::BuiltModel,
+    net: &mut nn::DoubleAccumulatorNNUE,
 ) -> (ChessMove, i32) {
     // initialize hash table, size: 256
     let mut table = CacheTable::new(256, TranspositionTableEntry::default());
@@ -46,7 +46,7 @@ pub fn root_search(
     mut beta: i32,
     depth: u8,
     dev: &nn::Device,
-    net: &nn::BuiltModel,
+    net: &mut nn::DoubleAccumulatorNNUE,
 ) -> (ChessMove, i32) {
     let alpha_orig = alpha;
     if let Some(entry) = table.get(board.get_hash()) {
@@ -115,7 +115,7 @@ pub fn negamax(
     mut beta: i32,
     depth: u8,
     dev: &nn::Device,
-    net: &nn::BuiltModel,
+    net: &mut nn::DoubleAccumulatorNNUE,
 ) -> i32 {
     let alpha_orig = alpha;
     if let Some(entry) = table.get(board.get_hash()) {
@@ -133,12 +133,9 @@ pub fn negamax(
     }
 
     if depth == 0 {
-        let mut board_tensor = vec![0f32; 768];
-        crate::nn::encode(&board, &mut board_tensor);
-        let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
-        let logits = net.forward(test_tensor);
-        let eval = (logits.array()[0] * 900.0) as i32;
-        return eval;
+        net.reset();
+        net.activate_all(&board);
+        return net.eval(board.side_to_move());
     }
 
     match board.status() {

@@ -26,7 +26,7 @@ fn main() {
     let mut model = dev.build_module::<nn::Model<256>, f32>();
     model.load("./nnue/nnue.npz").unwrap();
 
-	let mut nnue = nn::DoubleAccumulatorNNUE::from_built_model(&model);
+    let mut nnue = nn::DoubleAccumulatorNNUE::from_built_model(&model);
 
     //let mut inference = nn::DoubleAccumulatorNNUE::from_built_model(&model);
     let mut board = Board::default();
@@ -37,7 +37,7 @@ fn main() {
             nn::train(
                 "./nnue/nnue.npz",
                 "dataset2.csv",
-				"testset.csv",
+                "testset.csv",
                 false,
                 1e-3,
                 0.0,
@@ -137,11 +137,11 @@ fn main() {
                 let eval = (logits.array()[0] * 900.0) as i32;
                 dbg!(eval);
 
-				nnue.reset();
-				nnue.activate_all(&board);
-				dbg!(nnue.eval(board.side_to_move()));
+                nnue.reset();
+                nnue.activate_all(&board);
+                dbg!(nnue.eval(board.side_to_move()));
 
-                let result = search::iterative_deepening_search(board, &dev, &model);
+                let result = search::iterative_deepening_search(board, &dev, &mut nnue);
                 println!("bestmove {}", result.0);
             }
             UciMessage::IsReady => println!("readyok"),

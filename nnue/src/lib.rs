@@ -187,7 +187,7 @@ pub unsafe extern "C" fn prophet_utter_evaluation(prophet: &mut Prophet, side_to
 pub unsafe extern "C" fn prophet_train(
     model_name: *const c_char,
     dataset: *const c_char,
-	testset: *const c_char,
+    testset: *const c_char,
     bootstrap: bool,
     lr: f32,
     l2_weight_decay: f32,
@@ -199,10 +199,16 @@ pub unsafe extern "C" fn prophet_train(
     let dataset = CStr::from_ptr(dataset);
     let dataset = dataset.to_str().unwrap();
 
-	let testset = CStr::from_ptr(testset);
+    let testset = CStr::from_ptr(testset);
     let testset = testset.to_str().unwrap();
 
     nn::train(
-        model_name, dataset, testset, bootstrap, lr, l2_weight_decay, epochs,
+        model_name,
+        dataset,
+        testset,
+        bootstrap,
+        lr,
+        l2_weight_decay,
+        epochs,
     );
 }
