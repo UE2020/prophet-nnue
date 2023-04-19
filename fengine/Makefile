@@ -26,10 +26,7 @@ $(OBJDIR)/types.o: surge/src/types.cpp surge/src/*.h
 	mkdir -p $(OBJDIR)
 	$(CXX) -c $< $(CXXFLAGS) -o $@
 
-.PHONY: clean install
+.PHONY: clean
 
 clean:
 	rm -rf $(TARGET) $(OBJDIR)
-
-install:
-	cp $(TARGET) $(PREFIX)/bin/
