@@ -36,8 +36,8 @@ fn main() {
         if line == "learn" {
             nn::train(
                 "./nnue/nnue.npz",
-                "./nnue/dataset.csv",
-                "./nnue/testset.csv",
+                "./quiet-dataset.csv",
+                "./testset.csv",
                 false,
                 1e-3,
                 0.0,
