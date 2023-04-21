@@ -117,6 +117,10 @@ pub fn train(
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
 
+		if board.null_move().is_none() {
+			continue;
+		}
+
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
             eval.clamp(-1500, 1500)
         } else {
@@ -151,6 +155,7 @@ pub fn train(
         let file = std::fs::File::open(data).expect("file not found");
         let mut rdr = csv::Reader::from_reader(file);
         let mut records = rdr.records();
+		let mut skipped = 0usize;
         loop {
             let mut last = false;
             let mut num_training_steps = 0;
@@ -165,6 +170,11 @@ pub fn train(
                 if let Some(record) = record {
                     let record = record.expect("failed to read record");
                     let board = Board::from_str(&record[0]).expect("bad fen");
+
+					if board.null_move().is_none() {
+						skipped += 1;
+						continue;
+					}
 
                     let eval = if let Ok(eval) = record[1].parse::<i32>() {
                         eval.clamp(-1500, 1500)
@@ -234,9 +244,10 @@ pub fn train(
 
         eprint!("{}{}", up(), erase());
         eprintln!(
-            "[TRAINER] Epoch {i_epoch}\tLoss: {:.5}\tTest Loss: {:.5}",
+            "[TRAINER] Epoch {i_epoch}\tLoss: {:.5}\tTest Loss: {:.5}\tSkipped {} positions",
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
             BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
+			skipped
         );
         eprintln!();
 
