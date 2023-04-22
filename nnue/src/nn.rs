@@ -17,7 +17,7 @@ pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> =
 pub type Model<const TRANSFORMED_SIZE: usize> = (
     // feature transformer
     FeatureTransformer<TRANSFORMED_SIZE>,
-    (Linear<TRANSFORMED_SIZE, 1>, Tanh)
+    Linear<TRANSFORMED_SIZE, 1>
 );
 
 pub type BuiltModel = (
@@ -25,7 +25,7 @@ pub type BuiltModel = (
         modules::Linear<768, 256, f32, Cpu>,
         ClippedReLU,
     ),
-    (modules::Linear<256, 1, f32, Cpu>, Tanh),
+    modules::Linear<256, 1, f32, Cpu>,
 );
 
 pub struct Positions {
@@ -121,7 +121,7 @@ pub fn train(
 		}
 
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
-            eval.clamp(-2000, 2000)
+            eval
         } else {
             continue;
         };
@@ -130,7 +130,7 @@ pub fn train(
         encode(&board, &mut input);
         test_positions.input.push(input);
 
-        test_positions.labels.push(eval as f32 / 2000.0);
+        test_positions.labels.push(eval as f32);
     }
 
     eprintln!("[TRAINER] Done! Uploading data...");
@@ -139,6 +139,7 @@ pub fn train(
 
     const BATCH_SIZE: usize = 64;
     const BATCHES_IN_MEM: usize = BATCH_SIZE * 10000;
+	const CP_SCALING: f32 = 0.0045235127;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
@@ -157,7 +158,6 @@ pub fn train(
 		let mut skipped = 0usize;
         loop {
             let mut last = false;
-            let mut num_training_steps = 0;
 
             let mut train_positions = Positions {
                 input: vec![],
@@ -176,7 +176,7 @@ pub fn train(
 					}
 
                     let eval = if let Ok(eval) = record[1].parse::<i32>() {
-                        eval.clamp(-2000, 2000)
+                        eval
                     } else {
                         continue;
                     };
@@ -185,7 +185,7 @@ pub fn train(
                     encode(&board, &mut input);
                     train_positions.input.push(input);
 
-                    train_positions.labels.push(eval as f32 / 2000.0);
+                    train_positions.labels.push(eval as f32);
                 } else {
                     last = true;
                     break;
@@ -201,7 +201,10 @@ pub fn train(
                 .progress()
             {
                 let logits = model.forward_mut(input.traced(grads));
-                let loss = mse_loss(logits, label);
+				let wdl_eval_model = (logits * CP_SCALING).sigmoid();
+				let wdl_eval_target = (label * CP_SCALING).sigmoid();
+
+                let loss = (wdl_eval_model - wdl_eval_target).square().mean();
 
                 total_epoch_loss += loss.array();
                 num_batches += 1;
@@ -235,7 +238,10 @@ pub fn train(
             .stack()
         {
             let logits = model.forward(input);
-            let loss = mse_loss(logits, label);
+			let wdl_eval_model = (logits * CP_SCALING).sigmoid();
+			let wdl_eval_target = (label * CP_SCALING).sigmoid();
+
+			let loss: Tensor<(), f32, Cpu, NoneTape> = (wdl_eval_model - wdl_eval_target).square().mean();
 
             test_total_epoch_loss += loss.array();
             test_num_batches += 1;
@@ -515,7 +521,7 @@ impl DoubleAccumulatorNNUE {
                 .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),
             // no permutation is needed for 256x1 weight
-            hidden_layer: Layer::new(net.1 .0.weight.as_vec(), net.1 .0.bias.as_vec()),
+            hidden_layer: Layer::new(net.1.weight.as_vec(), net.1.bias.as_vec()),
         }
     }
 
@@ -593,7 +599,7 @@ impl DoubleAccumulatorNNUE {
             .for_each(|(clipped_activation, weight)| {
                 output += (clipped_activation as i32) * (*weight as i32)
             });
-        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 2000.0).round() as i32
+		output / (SCALE as i32 * SCALE as i32) 
     }
 
     #[inline(always)]
@@ -734,4 +740,4 @@ impl DoubleAccumulatorNNUE {
     }
 }
 
-const SCALE: i16 = 1024;
+const SCALE: i16 = 64;
