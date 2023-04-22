@@ -12,19 +12,18 @@ pub use clipped_relu::*;
 pub type Device = dfdx::tensor::AutoDevice;
 
 pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> =
-    (Linear<768, TRANSFORMED_SIZE>, ClippedReLU, DropoutOneIn<4>);
+    (Linear<768, TRANSFORMED_SIZE>, ClippedReLU);
 
 pub type Model<const TRANSFORMED_SIZE: usize> = (
     // feature transformer
     FeatureTransformer<TRANSFORMED_SIZE>,
-    (Linear<TRANSFORMED_SIZE, 1>, Tanh),
+    (Linear<TRANSFORMED_SIZE, 1>, Tanh)
 );
 
 pub type BuiltModel = (
     (
         modules::Linear<768, 256, f32, Cpu>,
         ClippedReLU,
-        DropoutOneIn<4>,
     ),
     (modules::Linear<256, 1, f32, Cpu>, Tanh),
 );
@@ -122,7 +121,7 @@ pub fn train(
 		}
 
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
-            eval.clamp(-1500, 1500)
+            eval.clamp(-2000, 2000)
         } else {
             continue;
         };
@@ -131,7 +130,7 @@ pub fn train(
         encode(&board, &mut input);
         test_positions.input.push(input);
 
-        test_positions.labels.push(eval as f32 / 1500.0);
+        test_positions.labels.push(eval as f32 / 2000.0);
     }
 
     eprintln!("[TRAINER] Done! Uploading data...");
@@ -177,7 +176,7 @@ pub fn train(
 					}
 
                     let eval = if let Ok(eval) = record[1].parse::<i32>() {
-                        eval.clamp(-1500, 1500)
+                        eval.clamp(-2000, 2000)
                     } else {
                         continue;
                     };
@@ -186,7 +185,7 @@ pub fn train(
                     encode(&board, &mut input);
                     train_positions.input.push(input);
 
-                    train_positions.labels.push(eval as f32 / 1500.0);
+                    train_positions.labels.push(eval as f32 / 2000.0);
                 } else {
                     last = true;
                     break;
@@ -594,7 +593,7 @@ impl DoubleAccumulatorNNUE {
             .for_each(|(clipped_activation, weight)| {
                 output += (clipped_activation as i32) * (*weight as i32)
             });
-        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 1500.0).round() as i32
+        ((output as f32 / (SCALE as f32 * SCALE as f32)).tanh() * 2000.0).round() as i32
     }
 
     #[inline(always)]

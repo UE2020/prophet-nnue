@@ -24,7 +24,7 @@ fn main() {
     let dev = Device::default();
 
     let mut model = dev.build_module::<nn::Model<256>, f32>();
-    model.load("./nnue/nnue.npz").unwrap();
+    //model.load("./nnue/nnue.npz").unwrap();
 
     let mut nnue = nn::DoubleAccumulatorNNUE::from_built_model(&model);
 
@@ -40,7 +40,7 @@ fn main() {
                 "./testset.csv",
                 false,
                 1e-3,
-                0.0,
+                1e-6,
                 50,
             );
         }
