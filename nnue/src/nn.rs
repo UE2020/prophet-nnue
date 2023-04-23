@@ -127,6 +127,12 @@ pub fn train(
             continue;
         };
 
+		let eval = if board.side_to_move() == Color::Black {
+			-eval
+		} else {
+			eval
+		};
+
         let mut input = vec![0f32; 768];
         encode(&board, &mut input);
         test_positions.input.push(input);
@@ -181,6 +187,12 @@ pub fn train(
                     } else {
                         continue;
                     };
+
+					let eval = if board.side_to_move() == Color::Black {
+						-eval
+					} else {
+						eval
+					};
 
                     let mut input = vec![0f32; 768];
                     encode(&board, &mut input);
@@ -299,17 +311,19 @@ pub fn pair_to_index(piece: chess::Square, offset: usize) -> usize {
 }
 
 pub fn vertical_flip(x: BitBoard, is_black: bool) -> BitBoard {
-    if is_black {
-        let mut x = x.0;
-        let k1 = 0x00FF00FF00FF00FF;
-        let k2 = 0x0000FFFF0000FFFF;
-        x = ((x >> 8) & k1) | ((x & k1) << 8);
-        x = ((x >> 16) & k2) | ((x & k2) << 16);
-        x = (x >> 32) | (x << 32);
-        BitBoard(x)
-    } else {
-        x
-    }
+    // if is_black {
+    //     let mut x = x.0;
+    //     let k1 = 0x00FF00FF00FF00FF;
+    //     let k2 = 0x0000FFFF0000FFFF;
+    //     x = ((x >> 8) & k1) | ((x & k1) << 8);
+    //     x = ((x >> 16) & k2) | ((x & k2) << 16);
+    //     x = (x >> 32) | (x << 32);
+    //     BitBoard(x)
+    // } else {
+    //     x
+    // }
+
+	x
 }
 
 pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
@@ -323,9 +337,9 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     let mut white = vertical_flip(board.color_combined(Color::White), is_black);
     let mut black = vertical_flip(board.color_combined(Color::Black), is_black);
 
-    if is_black {
-        std::mem::swap(&mut white, &mut black);
-    }
+    // if is_black {
+    //     std::mem::swap(&mut white, &mut black);
+    // }
 
     //////////////////// pawns ////////////////////
 
@@ -479,8 +493,7 @@ pub struct DoubleAccumulatorNNUE {
     input_weights: Vec<i16>,
     original_biases: Vec<i16>,
     // double accumulator architecture
-    white_input_activations: Vec<i16>,
-    black_input_activations: Vec<i16>,
+    input_activations: Vec<i16>,
     hidden_layer: Layer,
 }
 
@@ -505,15 +518,7 @@ impl DoubleAccumulatorNNUE {
                 .iter()
                 .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),
-            white_input_activations: net
-                .0
-                 .0
-                .bias
-                .as_vec()
-                .iter()
-                .map(|x| (x * SCALE as f32).round() as i16)
-                .collect(),
-            black_input_activations: net
+            input_activations: net
                 .0
                  .0
                 .bias
@@ -527,8 +532,7 @@ impl DoubleAccumulatorNNUE {
     }
 
     pub fn reset(&mut self) {
-        self.white_input_activations = self.original_biases.clone();
-        self.black_input_activations = self.original_biases.clone();
+        self.input_activations = self.original_biases.clone();
     }
 
     #[inline(always)]
@@ -539,19 +543,7 @@ impl DoubleAccumulatorNNUE {
         let weights =
             self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
 
-        self.white_input_activations
-            .iter_mut()
-            .zip(weights)
-            .for_each(|(activation, weight)| *activation += weight);
-
-        // black accumulator
-        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
-            + (sq.to_index() ^ 56))
-            * self.original_biases.len();
-        let weights =
-            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
-
-        self.black_input_activations
+        self.input_activations
             .iter_mut()
             .zip(weights)
             .for_each(|(activation, weight)| *activation += weight);
@@ -565,19 +557,7 @@ impl DoubleAccumulatorNNUE {
         let weights =
             self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
 
-        self.white_input_activations
-            .iter_mut()
-            .zip(weights)
-            .for_each(|(activation, weight)| *activation -= weight);
-
-        // black accumulator
-        let feature_idx = ((piece.to_index() * 2 + (!color).to_index()) * 64
-            + (sq.to_index() ^ 56))
-            * self.original_biases.len();
-        let weights =
-            self.input_weights[feature_idx..feature_idx + self.original_biases.len()].iter();
-
-        self.black_input_activations
+        self.input_activations
             .iter_mut()
             .zip(weights)
             .for_each(|(activation, weight)| *activation -= weight);
@@ -588,19 +568,20 @@ impl DoubleAccumulatorNNUE {
 
         let weights = self.hidden_layer.weights.iter();
 
-        let activations = match side_to_play {
-            Color::White => &self.white_input_activations,
-            Color::Black => &self.black_input_activations,
-        };
-
-        activations
+        self.input_activations
             .iter()
             .map(|x| Self::clipped_relu(*x))
             .zip(weights)
             .for_each(|(clipped_activation, weight)| {
                 output += (clipped_activation as i32) * (*weight as i32)
             });
-		output / (SCALE as i32 * SCALE as i32) 
+		let eval = output / (SCALE as i32 * SCALE as i32);
+
+		if side_to_play == Color::Black {
+			-eval 
+		} else {
+			eval
+		}
     }
 
     #[inline(always)]
