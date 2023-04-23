@@ -8,12 +8,12 @@ edition = "2021"
 [lib]
 name = "prophet"
 path = "src/lib.rs"
-crate-type = ["rlib", "staticlib"]
+crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 chess = "3.2.0"
 csv = "1.2.1"
-dfdx = { version="0.11.1", features = ["numpy", "nightly"] }
+dfdx = { version="0.11.1", features = ["numpy", "nightly", "cpu-mkl-matmul"] }
 indicatif = "0.17.3"
 rand = "0.8.5"
 vampirc-uci = "0.11.1"

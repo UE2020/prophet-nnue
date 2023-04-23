@@ -40,7 +40,7 @@ fn main() {
                 "./testset.csv",
                 false,
                 1e-3,
-                1e-6,
+                0.0,
                 50,
             );
         }
