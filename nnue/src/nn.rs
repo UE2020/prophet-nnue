@@ -127,11 +127,11 @@ pub fn train(
             continue;
         };
 
-		let eval = if board.side_to_move() == Color::Black {
-			-eval
-		} else {
-			eval
-		};
+		// let eval = if board.side_to_move() == Color::Black {
+		// 	-eval
+		// } else {
+		// 	eval
+		// };
 
         let mut input = vec![0f32; 768];
         encode(&board, &mut input);
@@ -188,11 +188,11 @@ pub fn train(
                         continue;
                     };
 
-					let eval = if board.side_to_move() == Color::Black {
-						-eval
-					} else {
-						eval
-					};
+					// let eval = if board.side_to_move() == Color::Black {
+					// 	-eval
+					// } else {
+					// 	eval
+					// };
 
                     let mut input = vec![0f32; 768];
                     encode(&board, &mut input);
@@ -334,8 +334,8 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
     let rooks = vertical_flip(board.pieces(Piece::Rook), is_black);
     let queens = vertical_flip(board.pieces(Piece::Queen), is_black);
     let kings = vertical_flip(board.pieces(Piece::King), is_black);
-    let mut white = vertical_flip(board.color_combined(Color::White), is_black);
-    let mut black = vertical_flip(board.color_combined(Color::Black), is_black);
+    let white = vertical_flip(board.color_combined(Color::White), is_black);
+    let black = vertical_flip(board.color_combined(Color::Black), is_black);
 
     // if is_black {
     //     std::mem::swap(&mut white, &mut black);
@@ -466,7 +466,6 @@ pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
 struct Layer {
     weights: Vec<i16>,
     biases: Vec<i16>,
-    activations: Vec<i16>, // used for incremental layer
 }
 
 impl Layer {
@@ -477,10 +476,6 @@ impl Layer {
                 .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),
             biases: biases
-                .iter()
-                .map(|x| (x * SCALE as f32).round() as i16)
-                .collect(),
-            activations: biases
                 .iter()
                 .map(|x| (x * SCALE as f32).round() as i16)
                 .collect(),

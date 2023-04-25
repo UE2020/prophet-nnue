@@ -1,6 +1,8 @@
 use std::time::Instant;
 use std::{path::PathBuf, fs::File};
-use std::io::{prelude::*, BufWriter, self};
+use std::io::{prelude::*, BufWriter, BufReader, self};
+use std::process::{Command, Stdio};
+use regex::Regex;
 
 use structopt::StructOpt;
 use uciengine::{uciengine::*, analysis::*};
@@ -34,7 +36,15 @@ struct Opt {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     
-	let engine = UciEngine::new(opt.engine_path.display());
+    let mut child = Command::new(&opt.engine_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("failed to execute child");
+
+	let re = Regex::new(r"[-+]?[0-9]*\.?[0-9]+").unwrap();
+
 	let mut new_data = BufWriter::new(File::create(&opt.output).expect("failed to create output file"));
 	new_data.write_all(b"FEN,Evaluation\n").expect("failed to write to output file");
 
@@ -51,30 +61,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let mut counter = 0usize;
 	let now = Instant::now();
-    for result in rdr.records() {
+    'outer: for result in rdr.records() {
 		let record = result.expect("failed to parse record");
 		if &record[0] == "FEN" {
 			continue;
 		}
 
-		let mut job = GoJob::new()
-        	.uci_opt("UCI_Variant", "chess")
-        	.pos_fen(&record[0]);
+		let child_stdin = child.stdin.as_mut().unwrap();
+        child_stdin
+            .write_all(format!("position fen {}\neval\n", &record[0]).as_bytes())
+            .expect("failed to write");
+        drop(child_stdin);
+        let child_stdout = child.stdout.as_mut().unwrap();
+		let mut reader = BufReader::new(child_stdout);
+        let eval = loop {
+            let mut bytes = vec![];
+            loop {
+                // read a char
+                let mut output = [0];
+                reader
+                    .read_exact(&mut output)
+                    .expect("Failed to read output");
+                if output[0] as char == '\n' {
+                    break;
+                }
+                bytes.push(output[0]);
+            }
+            let output = String::from_utf8_lossy(&bytes).to_string();
+			
+			if output.contains("in check") {
+				continue 'outer;
+			}
 
-		if let Some(depth) = opt.depth {
-			job = job.go_opt("depth", depth);
-		} else if let Some(nodes) = opt.nodes {
-			job = job.go_opt("nodes", nodes);
-		} else {
-			eprintln!("Error: no depth or nodes specified.");
-			break;
-		}
+			if output.contains("Total evaluation") {
+				let matched = re.find(&output);
+				if let Some(matched) = matched {
+					//child_stdout.read_exact(&mut [0, 0]).expect("Failed to read output");
+					break (matched.as_str().parse::<f32>().expect("failed to parse") * 100.0) as i32
+				}
+			}
+        };
 
-		let result = engine.go(job).await.expect("engine failure");
-		new_data.write_all(format!("{},{}\n", &record[0], match result.ai.score {
-			Score::Cp(cp) => cp,
-			Score::Mate(mate) => 1000 * mate.signum(),
-		}).as_bytes()).expect("failed to write to output file");
+		new_data.write_all(format!("{},{}\n", &record[0], eval).as_bytes()).expect("failed to write to output file");
 
 		if counter % 100 == 0 {
 			let speed = counter as f32 / now.elapsed().as_secs_f32();
