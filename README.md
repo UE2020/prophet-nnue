@@ -21,7 +21,7 @@ rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPPN1PPP/R1BQKBNR b KQkq - 1 3,-26
 rnbqkb1r/ppp2ppp/4pn2/3p4/3PP3/8/PPPN1PPP/R1BQKBNR w KQkq - 2 4,+50
 ```
 
-Evaluations must be from the side-to-play PoV.
+Evaluations must be from the white PoV.
 
 ## Features
 
