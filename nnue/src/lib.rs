@@ -7,6 +7,7 @@ use dfdx::prelude::*;
 use chess::*;
 
 mod nn;
+use nn::Encodable;
 
 #[repr(C)]
 pub struct ProphetBoard {
