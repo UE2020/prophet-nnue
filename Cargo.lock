@@ -155,15 +155,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cblas-sys"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6feecd82cce51b0204cf063f0041d69f24ce83f680d87514b004248e7b0fa65"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -399,9 +390,7 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "514b1692b4c5c095d4d457ad06c4bbcaa53a1d5dc8c4765b9cbc1f9b6252c4f4"
 dependencies = [
- "cblas-sys",
  "cudarc",
- "libc",
  "matrixmultiply",
  "num-traits",
  "rand 0.8.5",
