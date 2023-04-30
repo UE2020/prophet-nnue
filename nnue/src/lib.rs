@@ -97,7 +97,11 @@ pub unsafe extern "C" fn prophet_sing_evaluation(prophet: &Prophet, board: &Prop
     let test_tensor = prophet.dev.tensor_from_vec(board_tensor, (Const::<768>,));
     let logits = prophet.net.forward(test_tensor);
     let eval = logits.array()[0] as i32;
-    eval
+    if board.side_to_move() == Color::Black {
+        -eval
+    } else {
+        eval
+    }
 }
 
 /// Activate a piece on the accumulators
