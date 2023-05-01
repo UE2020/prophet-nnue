@@ -1,5 +1,5 @@
 # ProphetNNUE
-Dense 768-bit (no HalfKP) double-layer NNUE implementation, using residual evals (TODO: explain residues).
+Dense 768-bit (no HalfKP) double-layer NNUE implementation.
 
 ## Usage
 
