@@ -55,7 +55,7 @@ impl nn::Encodable for ProphetBoard {
 pub struct Prophet {
     net: nn::BuiltModel,
     dev: nn::Device,
-    nnue: nn::DoubleAccumulatorNNUE,
+    nnue: nn::QuantizedNNUE,
 }
 
 /// Raise the Prophet. The Prophet shall not be freed.
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn raise_prophet(net_path: *const c_char) -> *mut Prophet 
     }
     let painter = Box::new(Prophet {
         dev,
-        nnue: nn::DoubleAccumulatorNNUE::from_built_model(&model),
+        nnue: nn::QuantizedNNUE::from_built_model(&model),
         net: model,
     });
     Box::into_raw(painter)

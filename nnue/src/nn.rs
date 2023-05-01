@@ -484,7 +484,7 @@ impl Layer {
 }
 
 #[derive(Clone)]
-pub struct DoubleAccumulatorNNUE {
+pub struct QuantizedNNUE {
     input_weights: Vec<i16>,
     original_biases: Vec<i16>,
     // double accumulator architecture
@@ -492,7 +492,7 @@ pub struct DoubleAccumulatorNNUE {
     hidden_layer: Layer,
 }
 
-impl DoubleAccumulatorNNUE {
+impl QuantizedNNUE {
     pub fn from_built_model(net: &BuiltModel) -> Self {
         Self {
             input_weights: net

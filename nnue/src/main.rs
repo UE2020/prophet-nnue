@@ -26,9 +26,9 @@ fn main() {
     let mut model = dev.build_module::<nn::Model<256>, f32>();
     model.load("./nnue/nnue.npz").unwrap();
 
-    let mut nnue = nn::DoubleAccumulatorNNUE::from_built_model(&model);
+    let mut nnue = nn::QuantizedNNUE::from_built_model(&model);
 
-    //let mut inference = nn::DoubleAccumulatorNNUE::from_built_model(&model);
+    //let mut inference = nn::QuantizedNNUE::from_built_model(&model);
     let mut board = Board::default();
 
     for line in io::stdin().lock().lines() {
