@@ -14,7 +14,7 @@ pub type HashTable = CacheTable<TranspositionTableEntry>;
 pub fn iterative_deepening_search(
     board: Board,
     dev: &nn::Device,
-    net: &mut nn::DoubleAccumulatorNNUE,
+    net: &mut nn::QuantizedNNUE,
 ) -> (ChessMove, i32) {
     // initialize hash table, size: 256
     let mut table = CacheTable::new(256, TranspositionTableEntry::default());
@@ -46,7 +46,7 @@ pub fn root_search(
     mut beta: i32,
     depth: u8,
     dev: &nn::Device,
-    net: &mut nn::DoubleAccumulatorNNUE,
+    net: &mut nn::QuantizedNNUE,
 ) -> (ChessMove, i32) {
     let alpha_orig = alpha;
     if let Some(entry) = table.get(board.get_hash()) {
@@ -115,7 +115,7 @@ pub fn negamax(
     mut beta: i32,
     depth: u8,
     dev: &nn::Device,
-    net: &mut nn::DoubleAccumulatorNNUE,
+    net: &mut nn::QuantizedNNUE,
 ) -> i32 {
     let alpha_orig = alpha;
     if let Some(entry) = table.get(board.get_hash()) {
