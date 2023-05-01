@@ -282,8 +282,8 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
         return std::exp(static_evaluation - max) / sum;
     });
 
-    DirichletDistribution<RNG> dirichlet(std::vector<double>(move_count, 0.3));
-    auto noise_probabilities = dirichlet(generator);
+    DirichletDistribution<double> dirichlet_dist(std::vector<double>(move_count, 0.3));
+    auto noise_probabilities = dirichlet_dist(generator);
     for (size_t i = 0; i < move_count; i++) {
         probabilities[i] = probabilities[i] * (1 - noise_weight) + noise_weight * noise_probabilities[i];
     }
@@ -326,7 +326,7 @@ int main(int argc, char* argv[]) {
 
     po::options_description desc("Options");
     po::variables_map vm;
-    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight,w", po::value(&noise_weight)->required(), "Noise weight")("q-search,q", "Only output quiescent positions")("output,o", po::value(&path)->required(), "Output file path");
+    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight,w", po::value(&noise_weight)->required(), "Noise weight (randomizes noise weight per game if negative)")("q-search,q", "Only output quiescent positions")("output,o", po::value(&path)->required(), "Output file path");
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
         po::notify(vm);
@@ -349,7 +349,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Using # games: " << game_count << std::endl;
     std::cout << "Using max plies: " << max_plies << std::endl;
-    std::cout << "Using noise weight: " << noise_weight << std::endl;
+    std::cout << "Using noise weight: " << (noise_weight < 0 ? "random" : std::to_string(noise_weight)) << std::endl;
     std::cout << "Using q-search: " << std::boolalpha << q_search << std::endl;
     std::cout << "Using output file: " << path << std::endl;
     std::cout << "Beginning FEN generation!" << std::endl;
@@ -362,11 +362,16 @@ int main(int argc, char* argv[]) {
     Position pos(DEFAULT_FEN);
     std::random_device rd;
     std::mt19937 mt(rd());
+    std::uniform_real_distribution<double> noise_weight_dist(0, 1);
 
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << std::fixed << std::setprecision(3);
     for (int i = 0; i < game_count; i++) {
-        descend<WHITE>(pos, mt, fens, noise_weight, max_plies, q_search);
+        if (noise_weight < 0) {
+            descend<WHITE>(pos, mt, fens, noise_weight_dist(mt), max_plies, q_search);
+        } else {
+            descend<WHITE>(pos, mt, fens, noise_weight, max_plies, q_search);
+        }
         auto current_time = std::chrono::high_resolution_clock::now();
         if ((i % 100) == 0) {
             std::cout << "\33[2K\rPlayed " << i << " games, produced " << fens.size() << " positions (" << (float) i / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " games/s, " << (float) fens.size() / std::chrono::duration_cast<std::chrono::microseconds>(current_time - start_time).count() * 1'000'000 << " positions/s)" << std::flush;
