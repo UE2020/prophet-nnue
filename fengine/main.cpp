@@ -232,7 +232,7 @@ int evaluate(const Position& pos) {
 }
 
 template <Color Us, typename RNG>
-void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fens, double noise_weight, int max_plies = 60, bool q_search = false) {
+void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fens, double noise_weight, int max_plies = 60, bool q_search = false, bool balanced = false) {
     if (pos.game_ply > max_plies) {
         return;
     }
@@ -245,21 +245,23 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
         return;
     } else if (move_count == 1) {
         pos.play<Us>(moves[0]);
-        if (q_search) {
-            MoveList<~Us> moves(pos);
-            size_t capturing_moves = 0;
-            for (const auto& move : moves) {
-                if (move.is_capture()) {
-                    capturing_moves++;
+        if (!balanced || std::abs(evaluate<Us>(pos)) < 100) {
+            if (q_search) {
+                MoveList<~Us> moves(pos);
+                size_t capturing_moves = 0;
+                for (const auto& move : moves) {
+                    if (move.is_capture()) {
+                        capturing_moves++;
+                    }
                 }
-            }
-            if (!capturing_moves) {
+                if (!capturing_moves) {
+                    fens.insert(pos.fen());
+                }
+            } else {
                 fens.insert(pos.fen());
             }
-        } else {
-            fens.insert(pos.fen());
         }
-        descend<~Us>(pos, generator, fens, noise_weight, max_plies, q_search);
+        descend<~Us>(pos, generator, fens, noise_weight, max_plies, q_search, balanced);
         pos.undo<Us>(moves[0]);
         return;
     }
@@ -290,21 +292,23 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
 
     double* max_probability = std::max_element(probabilities, probabilities + move_count);
     pos.play<Us>(moves[max_probability - probabilities]);
-    if (q_search) {
-        MoveList<~Us> moves(pos);
-        size_t capturing_moves = 0;
-        for (const auto& move : moves) {
-            if (move.is_capture()) {
-                capturing_moves++;
+    if (!balanced || std::abs(static_evaluations[max_probability - probabilities]) < 100) {
+        if (q_search) {
+            MoveList<~Us> moves(pos);
+            size_t capturing_moves = 0;
+            for (const auto& move : moves) {
+                if (move.is_capture()) {
+                    capturing_moves++;
+                }
             }
-        }
-        if (!capturing_moves) {
+            if (!capturing_moves) {
+                fens.insert(pos.fen());
+            }
+        } else {
             fens.insert(pos.fen());
         }
-    } else {
-        fens.insert(pos.fen());
     }
-    descend<~Us>(pos, generator, fens, noise_weight, max_plies, q_search);
+    descend<~Us>(pos, generator, fens, noise_weight, max_plies, q_search, balanced);
     pos.undo<Us>(moves[max_probability - probabilities]);
 }
 
@@ -322,11 +326,12 @@ int main(int argc, char* argv[]) {
     int max_plies;
     double noise_weight;
     bool q_search;
+    bool balanced;
     std::string path;
 
     po::options_description desc("Options");
     po::variables_map vm;
-    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight,w", po::value(&noise_weight)->required(), "Noise weight (randomizes noise weight per game if negative)")("q-search,q", "Only output quiescent positions")("output,o", po::value(&path)->required(), "Output file path");
+    desc.add_options()("help,h", "Show this help message and exit")("games,n", po::value(&game_count)->default_value(250000), "Number of games to play out")("max-plies,m", po::value(&max_plies)->default_value(60), "Max amount of plies per game")("noise-weight,w", po::value(&noise_weight)->required(), "Noise weight (randomizes noise weight per game if negative)")("q-search,q", "Only output quiescent positions")("balanced,b", "Only output balanced positions")("output,o", po::value(&path)->required(), "Output file path");
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
         po::notify(vm);
@@ -337,6 +342,7 @@ int main(int argc, char* argv[]) {
         }
 
         q_search = vm.count("q-search");
+        balanced = vm.count("balanced");
     } catch (std::exception& e) {
         if (vm.count("help")) {
             print_help(desc, argv[0]);
@@ -347,10 +353,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    std::cout << std::boolalpha;
     std::cout << "Using # games: " << game_count << std::endl;
     std::cout << "Using max plies: " << max_plies << std::endl;
     std::cout << "Using noise weight: " << (noise_weight < 0 ? "random" : std::to_string(noise_weight)) << std::endl;
-    std::cout << "Using q-search: " << std::boolalpha << q_search << std::endl;
+    std::cout << "Using q-search: " << q_search << std::endl;
+    std::cout << "Using balanced positions: " << balanced << std::endl;
     std::cout << "Using output file: " << path << std::endl;
     std::cout << "Beginning FEN generation!" << std::endl;
     std::cout << std::endl;
@@ -368,9 +376,9 @@ int main(int argc, char* argv[]) {
     std::cout << std::fixed << std::setprecision(3);
     for (int i = 0; i < game_count; i++) {
         if (noise_weight < 0) {
-            descend<WHITE>(pos, mt, fens, noise_weight_dist(mt), max_plies, q_search);
+            descend<WHITE>(pos, mt, fens, noise_weight_dist(mt), max_plies, q_search, balanced);
         } else {
-            descend<WHITE>(pos, mt, fens, noise_weight, max_plies, q_search);
+            descend<WHITE>(pos, mt, fens, noise_weight, max_plies, q_search, balanced);
         }
         auto current_time = std::chrono::high_resolution_clock::now();
         if ((i % 100) == 0) {
