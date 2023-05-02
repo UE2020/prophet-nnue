@@ -38,7 +38,7 @@ fn main() {
                 "./nnue/nnue.npz",
                 "./nnue/dataset.csv",
                 "./nnue/testset.csv",
-                true,
+                false,
                 1e-3,
                 0.0,
                 50,

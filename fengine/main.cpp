@@ -370,7 +370,7 @@ int main(int argc, char* argv[]) {
     Position pos(DEFAULT_FEN);
     std::random_device rd;
     std::mt19937 mt(rd());
-    std::uniform_real_distribution<double> noise_weight_dist(0, 1);
+    std::uniform_real_distribution<double> noise_weight_dist(0.0, 1.0);
 
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << std::fixed << std::setprecision(3);
