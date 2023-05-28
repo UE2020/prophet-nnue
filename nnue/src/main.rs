@@ -45,7 +45,7 @@ fn main() {
             );
         }
         let msg: UciMessage = parse_one(&line);
-		dbg!(&msg);
+        dbg!(&msg);
         match msg {
             UciMessage::Uci => {
                 println!("id name ProphetNNUE");
@@ -56,12 +56,12 @@ fn main() {
                 moves,
                 fen,
             } => {
-				dbg!(&fen);
+                dbg!(&fen);
                 if startpos {
                     board = Board::default();
                 } else if let Some(fen) = fen {
                     board = Board::from_str(&fen.0).unwrap();
-					println!("set fen");
+                    println!("set fen");
                 }
 
                 for mov in moves {

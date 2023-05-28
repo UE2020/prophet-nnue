@@ -17,14 +17,14 @@ pub type FeatureTransformer<const TRANSFORMED_SIZE: usize> =
 pub type Model<const TRANSFORMED_SIZE: usize> = (
     // feature transformer
     FeatureTransformer<TRANSFORMED_SIZE>,
-    Linear<TRANSFORMED_SIZE, 1>
+    Linear<TRANSFORMED_SIZE, 1>,
 );
 
 pub type BuiltModel = (
     (
         modules::Linear<768, 256, f32, Cpu>,
         ClippedReLU,
-		DropoutOneIn<4>
+        DropoutOneIn<4>,
     ),
     modules::Linear<256, 1, f32, Cpu>,
 );
@@ -117,9 +117,9 @@ pub fn train(
         let record = result.unwrap();
         let board = Board::from_str(&record[0]).expect("bad fen");
 
-		if board.null_move().is_none() {
-			continue;
-		}
+        if board.null_move().is_none() {
+            continue;
+        }
 
         let eval = if let Ok(eval) = record[1].parse::<i32>() {
             eval
@@ -127,11 +127,11 @@ pub fn train(
             continue;
         };
 
-		// let eval = if board.side_to_move() == Color::Black {
-		// 	-eval
-		// } else {
-		// 	eval
-		// };
+        // let eval = if board.side_to_move() == Color::Black {
+        // 	-eval
+        // } else {
+        // 	eval
+        // };
 
         let mut input = vec![0f32; 768];
         encode(&board, &mut input);
@@ -146,7 +146,7 @@ pub fn train(
 
     const BATCH_SIZE: usize = 64;
     const BATCHES_IN_MEM: usize = BATCH_SIZE * 10000;
-	const CP_SCALING: f32 = 0.0045235127;
+    const CP_SCALING: f32 = 0.0045235127;
 
     let preprocess = |(input, lbl): <Positions as ExactSizeDataset>::Item<'_>| {
         (
@@ -162,7 +162,7 @@ pub fn train(
         let file = std::fs::File::open(data).expect("file not found");
         let mut rdr = csv::Reader::from_reader(file);
         let mut records = rdr.records();
-		let mut skipped = 0usize;
+        let mut skipped = 0usize;
         loop {
             let mut last = false;
 
@@ -177,10 +177,10 @@ pub fn train(
                     let record = record.expect("failed to read record");
                     let board = Board::from_str(&record[0]).expect("bad fen");
 
-					if board.null_move().is_none() {
-						skipped += 1;
-						continue;
-					}
+                    if board.null_move().is_none() {
+                        skipped += 1;
+                        continue;
+                    }
 
                     let eval = if let Ok(eval) = record[1].parse::<i32>() {
                         eval
@@ -188,11 +188,11 @@ pub fn train(
                         continue;
                     };
 
-					// let eval = if board.side_to_move() == Color::Black {
-					// 	-eval
-					// } else {
-					// 	eval
-					// };
+                    // let eval = if board.side_to_move() == Color::Black {
+                    // 	-eval
+                    // } else {
+                    // 	eval
+                    // };
 
                     let mut input = vec![0f32; 768];
                     encode(&board, &mut input);
@@ -214,8 +214,8 @@ pub fn train(
                 .progress()
             {
                 let logits = model.forward_mut(input.traced(grads));
-				let wdl_eval_model = (logits * CP_SCALING).sigmoid();
-				let wdl_eval_target = (label * CP_SCALING).sigmoid();
+                let wdl_eval_model = (logits * CP_SCALING).sigmoid();
+                let wdl_eval_target = (label * CP_SCALING).sigmoid();
 
                 let loss = (wdl_eval_model - wdl_eval_target).square().mean();
 
@@ -251,10 +251,11 @@ pub fn train(
             .stack()
         {
             let logits = model.forward(input);
-			let wdl_eval_model = (logits * CP_SCALING).sigmoid();
-			let wdl_eval_target = (label * CP_SCALING).sigmoid();
+            let wdl_eval_model = (logits * CP_SCALING).sigmoid();
+            let wdl_eval_target = (label * CP_SCALING).sigmoid();
 
-			let loss: Tensor<(), f32, Cpu, NoneTape> = (wdl_eval_model - wdl_eval_target).square().mean();
+            let loss: Tensor<(), f32, Cpu, NoneTape> =
+                (wdl_eval_model - wdl_eval_target).square().mean();
 
             test_total_epoch_loss += loss.array();
             test_num_batches += 1;
@@ -265,7 +266,7 @@ pub fn train(
             "[TRAINER] Epoch {i_epoch}\tLoss: {:.5}\tTest Loss: {:.5}\tSkipped {} positions",
             BATCH_SIZE as f32 * total_epoch_loss / num_batches as f32,
             BATCH_SIZE as f32 * test_total_epoch_loss / test_num_batches as f32,
-			skipped
+            skipped
         );
         eprintln!();
 
@@ -323,7 +324,7 @@ pub fn vertical_flip(x: BitBoard, is_black: bool) -> BitBoard {
     //     x
     // }
 
-	x
+    x
 }
 
 pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
@@ -570,13 +571,13 @@ impl QuantizedNNUE {
             .for_each(|(clipped_activation, weight)| {
                 output += (clipped_activation as i32) * (*weight as i32)
             });
-		let eval = output / (SCALE as i32 * SCALE as i32);
+        let eval = output / (SCALE as i32 * SCALE as i32);
 
-		if side_to_play == Color::Black {
-			-eval 
-		} else {
-			eval
-		}
+        if side_to_play == Color::Black {
+            -eval
+        } else {
+            eval
+        }
     }
 
     #[inline(always)]
