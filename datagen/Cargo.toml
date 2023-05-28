@@ -10,4 +10,3 @@ csv = "1.2.1"
 regex = "1.8.1"
 structopt = { version = "0.3.26", features=["color"] }
 tokio = { version = "1.0.1", features = ["full"] }
-uciengine = "0.1.33"

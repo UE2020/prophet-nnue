@@ -5,7 +5,6 @@ use std::time::Instant;
 use std::{fs::File, path::PathBuf};
 
 use structopt::StructOpt;
-use uciengine::{analysis::*, uciengine::*};
 
 /// ProphetNNUE evaluation data generator.
 #[derive(StructOpt, Debug)]

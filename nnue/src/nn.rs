@@ -1,4 +1,4 @@
-use dfdx::{data::*, losses::mse_loss, nn::SaveToNpz, optim::*, prelude::*, tensor_ops::Backward};
+use dfdx::{data::*, nn::SaveToNpz, optim::*, prelude::*, tensor_ops::Backward};
 
 use chess::*;
 use indicatif::ProgressIterator;
@@ -42,25 +42,6 @@ impl ExactSizeDataset for Positions {
     fn len(&self) -> usize {
         self.input.len()
     }
-}
-
-/// Calculate material imbalance
-pub fn eval<E: Encodable>(board: &E) -> i32 {
-    let pawns = board.pieces(Piece::Pawn);
-    let knights = board.pieces(Piece::Knight);
-    let bishops = board.pieces(Piece::Bishop);
-    let rooks = board.pieces(Piece::Rook);
-    let queens = board.pieces(Piece::Queen);
-
-    let white = board.color_combined(Color::White);
-    let black = board.color_combined(Color::Black);
-
-    let eval = (((pawns & white).popcnt() as i32 * 100) - ((pawns & black).popcnt() as i32 * 100))
-        + (((knights & white).popcnt() as i32 * 300) - ((knights & black).popcnt() as i32 * 300))
-        + (((bishops & white).popcnt() as i32 * 305) - ((bishops & black).popcnt() as i32 * 305))
-        + (((rooks & white).popcnt() as i32 * 500) - ((rooks & black).popcnt() as i32 * 500))
-        + (((queens & white).popcnt() as i32 * 900) - ((queens & black).popcnt() as i32 * 900));
-    eval
 }
 
 /// Train a new or existing neural network, using the given model name, data path, test/train split, learning rate, and Nesterov momentum.
@@ -311,32 +292,15 @@ pub fn pair_to_index(piece: chess::Square, offset: usize) -> usize {
     //piece.to_index() + (64 * king.to_index()) + (offset * 4096)
 }
 
-pub fn vertical_flip(x: BitBoard, is_black: bool) -> BitBoard {
-    // if is_black {
-    //     let mut x = x.0;
-    //     let k1 = 0x00FF00FF00FF00FF;
-    //     let k2 = 0x0000FFFF0000FFFF;
-    //     x = ((x >> 8) & k1) | ((x & k1) << 8);
-    //     x = ((x >> 16) & k2) | ((x & k2) << 16);
-    //     x = (x >> 32) | (x << 32);
-    //     BitBoard(x)
-    // } else {
-    //     x
-    // }
-
-    x
-}
-
 pub fn encode<E: Encodable>(board: &E, out: &mut [f32]) {
-    let is_black = board.side_to_move() == Color::Black;
-    let pawns = vertical_flip(board.pieces(Piece::Pawn), is_black);
-    let knights = vertical_flip(board.pieces(Piece::Knight), is_black);
-    let bishops = vertical_flip(board.pieces(Piece::Bishop), is_black);
-    let rooks = vertical_flip(board.pieces(Piece::Rook), is_black);
-    let queens = vertical_flip(board.pieces(Piece::Queen), is_black);
-    let kings = vertical_flip(board.pieces(Piece::King), is_black);
-    let white = vertical_flip(board.color_combined(Color::White), is_black);
-    let black = vertical_flip(board.color_combined(Color::Black), is_black);
+    let pawns = board.pieces(Piece::Pawn);
+    let knights = board.pieces(Piece::Knight);
+    let bishops = board.pieces(Piece::Bishop);
+    let rooks = board.pieces(Piece::Rook);
+    let queens = board.pieces(Piece::Queen);
+    let kings = board.pieces(Piece::King);
+    let white = board.color_combined(Color::White);
+    let black = board.color_combined(Color::Black);
 
     // if is_black {
     //     std::mem::swap(&mut white, &mut black);
@@ -546,6 +510,7 @@ impl QuantizedNNUE {
     }
 
     #[inline(always)]
+    #[allow(unused)]
     pub fn deactivate(&mut self, piece: Piece, color: Color, sq: chess::Square) {
         // white accumulator
         let feature_idx = ((piece.to_index() * 2 + color.to_index()) * 64 + sq.to_index())

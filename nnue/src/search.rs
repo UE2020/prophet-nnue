@@ -5,8 +5,6 @@ use chess::*;
 
 use crate::nn;
 
-use dfdx::prelude::*;
-
 const MAX_SEARCH_DEPTH: usize = 5;
 
 pub type HashTable = CacheTable<TranspositionTableEntry>;

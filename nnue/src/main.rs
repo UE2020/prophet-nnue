@@ -41,7 +41,6 @@ fn main() {
             );
         }
         let msg: UciMessage = parse_one(&line);
-        dbg!(&msg);
         match msg {
             UciMessage::Uci => {
                 println!("id name ProphetNNUE");
@@ -134,14 +133,14 @@ fn main() {
                 let test_tensor = dev.tensor_from_vec(board_tensor, (Const::<768>,));
                 let logits = model.forward(test_tensor);
                 let eval = logits.array()[0];
-                dbg!(eval);
+                eprintln!("NN eval: {}", eval);
 
                 nnue.reset();
                 nnue.activate_all(&board);
-                dbg!(nnue.eval(board.side_to_move()));
+                eprintln!("NNUE eval: {}", nnue.eval(board.side_to_move()));
 
-                //let result = search::iterative_deepening_search(board, &dev, &mut nnue);
-                //println!("bestmove {}", result.0);
+                let result = search::iterative_deepening_search(board, &dev, &mut nnue);
+                println!("bestmove {}", result.0);
             }
             UciMessage::IsReady => println!("readyok"),
             UciMessage::Quit => break,
