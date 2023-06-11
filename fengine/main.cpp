@@ -102,8 +102,8 @@ int evaluate(const Position& pos) {
     }
 
     let table = [];
-    for (let y = 7; y > -1; y--) {
-        for (let x = 0; x < 8; x++) {
+    for (let y = 7; y > -1; --y) {
+        for (let x = 0; x < 8; ++x) {
             table.push(Math.round(distance(x, y, 3.5, 3.5) * 20));
         }
     }
@@ -267,7 +267,7 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
     }
 
     int static_evaluations[move_count];
-    for (Move* move = moves; move != last_move; move++) {
+    for (Move* move = moves; move != last_move; ++move) {
         pos.play<Us>(*move);
         static_evaluations[move - moves] = evaluate<Us>(pos);
         pos.undo<Us>(*move);
@@ -286,7 +286,7 @@ void descend(Position& pos, RNG& generator, std::unordered_set<std::string>& fen
 
     DirichletDistribution<double> dirichlet_dist(std::vector<double>(move_count, 0.3));
     auto noise_probabilities = dirichlet_dist(generator);
-    for (size_t i = 0; i < move_count; i++) {
+    for (size_t i = 0; i < move_count; ++i) {
         probabilities[i] = probabilities[i] * (1 - noise_weight) + noise_weight * noise_probabilities[i];
     }
 
@@ -374,7 +374,7 @@ int main(int argc, char* argv[]) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << std::fixed << std::setprecision(3);
-    for (int i = 0; i < game_count; i++) {
+    for (int i = 0; i < game_count; ++i) {
         if (noise_weight < 0) {
             descend<WHITE>(pos, mt, fens, noise_weight_dist(mt), max_plies, q_search, balanced);
         } else {

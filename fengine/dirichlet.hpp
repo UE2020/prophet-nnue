@@ -13,7 +13,7 @@ public:
     void set_params(const std::vector<RealType>& new_params) {
         alpha = new_params;
         std::vector<std::gamma_distribution<RealType>> new_gamma(alpha.size());
-        for (size_t i = 0; i < alpha.size(); i++) {
+        for (size_t i = 0; i < alpha.size(); ++i) {
             std::gamma_distribution<RealType> temp(alpha[i], 1);
             new_gamma[i] = temp;
         }
@@ -28,7 +28,7 @@ public:
     std::vector<RealType> operator()(RNG& generator) {
         std::vector<RealType> x(alpha.size());
         RealType sum = 0;
-        for (size_t i = 0; i < alpha.size(); i++) {
+        for (size_t i = 0; i < alpha.size(); ++i) {
             x[i] = gamma[i](generator);
             sum += x[i];
         }
